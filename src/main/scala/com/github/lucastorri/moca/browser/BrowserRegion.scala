@@ -14,6 +14,7 @@ import javax.xml.transform.stream.StreamResult
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.url.Url
+import com.typesafe.scalalogging.StrictLogging
 import org.jsoup.Jsoup
 
 import scala.collection.JavaConversions._
@@ -82,7 +83,7 @@ class BrowserRegion private[browser](val id: String) extends Region {
 
 }
 
-object BrowserRegion {
+object BrowserRegion extends StrictLogging {
 
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
@@ -95,7 +96,9 @@ object BrowserRegion {
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
     val promise = Promise[BrowserRegion]()
     if (pool.isEmpty) {
-      spawn(BrowserWebView.run(newId, true)).onFailure { case e => e.printStackTrace() }
+      spawn(BrowserWebView.run(newId, true)).onFailure { case e =>
+        logger.error("Could not start browser", e)
+      }
       awaiting += promise
     } else {
       val region = pool.head

@@ -11,11 +11,12 @@ import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master.Event.{GoingDown, WorkNotAccepted, WorkStarted, WorkerTerminated}
 import com.github.lucastorri.moca.role.master.Master.{CleanUp, Reply}
 import com.github.lucastorri.moca.store.work.WorkRepo
+import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(works: WorkRepo) extends PersistentActor {
+class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
@@ -23,7 +24,7 @@ class Master(works: WorkRepo) extends PersistentActor {
   var state = State.initial()
 
   override def preStart(): Unit = {
-    println("Master started")
+    logger.info("Master started")
     system.scheduler.schedule(5.minutes, 5.minutes, self, CleanUp)
   } 
 
@@ -45,17 +46,19 @@ class Master(works: WorkRepo) extends PersistentActor {
           case Success(_) =>
             self ! ws
           case Failure(t) =>
-            t.printStackTrace()
+            logger.error(s"Could not start work ${ws.work.id} ${ws.work.seed} for $who", t)
             persist(WorkNotAccepted(ws.who, ws.work))(self ! _)
         }
       }
 
     case Terminated(who) =>
+      logger.info(s"Worker down: $who")
       persist(WorkerTerminated(who))(noop)
       works.releaseAll(state.get(who))
       state = state.cancel(who)
 
     case CleanUp =>
+      logger.trace("Clean up")
       //TODO check work that has been running for too long
       saveSnapshot(state)
       //TODO delete old snapshots and events
@@ -64,12 +67,12 @@ class Master(works: WorkRepo) extends PersistentActor {
       state = state.cancel(who, work)
 
     case ws @ WorkStarted(who, work) =>
-      println(ws)
+      logger.info(s"Work started ${work.id} ${work.seed}")
       state = state.start(who, work)
       watch(ws.who)
 
     case WorkDone(workId) =>
-      println(s"done $workId")
+      logger.info(s"Work done $workId")
       works.done(workId)
 
   }

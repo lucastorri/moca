@@ -6,10 +6,11 @@ import com.github.lucastorri.moca.role.Messages.{Ack, WorkDone, WorkOffer, WorkR
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker.{Done, RequestWork, State}
+import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 
-class Worker extends Actor with FSM[State, Option[Work]] {
+class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
   import context._
 
@@ -17,7 +18,7 @@ class Worker extends Actor with FSM[State, Option[Work]] {
   val master = Master.proxy()
 
   override def preStart(): Unit = {
-    println("worker started")
+    logger.info("worker started")
     self ! RequestWork
   }
 
@@ -38,7 +39,6 @@ class Worker extends Actor with FSM[State, Option[Work]] {
   when(State.Working) {
 
     case Event(Done, _) =>
-      println("done")
       sender() ! PoisonPill
       goto(State.Idle) using None
 
@@ -49,10 +49,12 @@ class Worker extends Actor with FSM[State, Option[Work]] {
     case State.Idle -> State.Working =>
       val work = nextStateData.get
       actorOf(Props(new Minion(work, Browser.instance())))
-      println(s"do work $nextStateData")
+      log.info(s"Starting work ${work.id} ${work.seed}")
 
     case State.Working -> State.Idle =>
-      stateData.foreach(work => master ! WorkDone(work.id))
+      val work = stateData.get
+      log.info(s"Work done ${work.id}")
+      master ! WorkDone(work.id)
       self ! RequestWork
 
   }

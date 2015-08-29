@@ -8,13 +8,14 @@ import com.github.lucastorri.moca.role.worker.Minion.Event.{Fetched, Found, NotF
 import com.github.lucastorri.moca.role.worker.Minion.{Event, Next}
 import com.github.lucastorri.moca.role.worker.Worker.Done
 import com.github.lucastorri.moca.url.Url
+import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Minion(work: Work, browser: Browser) extends PersistentActor {
+class Minion(work: Work, browser: Browser) extends PersistentActor with StrictLogging {
 
   import context._
 
@@ -70,8 +71,7 @@ class Minion(work: Work, browser: Browser) extends PersistentActor {
         case notFetched @ NotFetched(url, t) =>
           markFetched(url)
           scheduleNext()
-          t.printStackTrace()
-          //TODO log t
+          logger.error(s"Could not fetch $url", t)
 
       }
       persist(e)(noop)
@@ -79,9 +79,9 @@ class Minion(work: Work, browser: Browser) extends PersistentActor {
   }
 
   def fetch(url: Url): Future[Fetched] = {
-    println(s"started $url")
+    logger.trace(s"Requesting $url")
     browser.goTo(url) { page =>
-      println(s"doing $url")
+      logger.trace(s"Processing $url")
       Fetched(url, Found(page.links.toSeq: _*))
     }
   }
