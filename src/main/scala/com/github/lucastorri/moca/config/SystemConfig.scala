@@ -6,6 +6,7 @@ object SystemConfig {
 
   def fromConfig(config: MocaConfig): Config = {
 
+    val hostname = quote(config.hostname)
     val roles = stringArray(config.roles)
     val seeds =
       if (config.hasSeeds) stringArray(config.seeds.map(hostAndPort => seed(config.systemName, hostAndPort)))
@@ -27,12 +28,14 @@ object SystemConfig {
       |  remote {
       |    netty.tcp {
       |      port = ${config.port}
-      |      hostname = ""
+      |      hostname = $hostname
       |    }
       |  }
       |
       |}
       """.stripMargin
+
+    println(cfg)
 
     ConfigFactory.parseString(cfg)
       .withFallback(ConfigFactory.parseResourcesAnySyntax("store.conf"))
@@ -43,7 +46,10 @@ object SystemConfig {
     s"akka.tcp://$systemName@$hostAndPort"
 
   def stringArray(strings: Iterable[String]): String =
-    strings.map("\"" + _ + "\"").mkString("[", ",", "]")
+    strings.map(quote).mkString("[", ",", "]")
+
+  def quote(str: String): String =
+    "\"" + str + "\""
 
   def stringArray(strings: String*): String =
     stringArray(strings)

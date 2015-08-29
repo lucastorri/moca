@@ -8,6 +8,7 @@ case class MocaConfig(
   seeds: Set[String] = Set.empty,
   roles: Set[String] = MocaConfig.availableRoles,
   port: Int = 1731,
+  hostname: String = "",
   singletonPort: Int = 8888
 ) {
 
@@ -35,12 +36,16 @@ object MocaConfig {
       .unbounded()
       .valueName("host:port")
       .text("jars to include")
-      .validate(s => if (s.matches(".*:\\d+")) Left("invalid format") else Right(()))
+      .validate(s => if (s.matches(".*:\\d+")) success else failure(s"invalid format $s"))
       .action { (s, c) => c.copy(seeds = c.seeds + s) }
 
     opt[Int]('p', "port")
       .text("main system port")
       .action { (p, c) => c.copy(port = p) }
+
+    opt[String]('h', "hostname")
+      .text("main system hostname")
+      .action { (h, c) => c.copy(hostname = h) }
 
     opt[Int]('P', "singleton-port")
       .text("port of the singleton cluster")
@@ -48,7 +53,7 @@ object MocaConfig {
 
     opt[Seq[String]]('R', "roles")
       .text("roles of this instance")
-      .validate(r => if (r.forall(availableRoles.contains)) Left("invalid roles") else Right(()))
+      .validate(_.find(r => !availableRoles.contains(r)).map(r => failure(s"unknown role $r")).getOrElse(success))
       .action { (r, c) => c.copy(roles = r.toSet) }
 
     opt[Unit]("print-roles")
