@@ -1,7 +1,6 @@
 package com.github.lucastorri.moca
 
-import akka.actor.ActorSystem
-import com.github.lucastorri.moca.config.{MocaConfig, AkkaSystem}
+import com.github.lucastorri.moca.config.{AkkaSystem, MocaConfig}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.work.InMemWorkRepo
