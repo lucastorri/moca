@@ -39,8 +39,7 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
     }
 
     case RecoveryCompleted =>
-      val isNewJob = lastSequenceNr <= 0L
-      if (isNewJob) self ! Found(0, Set(work.seed))
+      if (downloaded.isEmpty) self ! Found(0, Set(work.seed))
       self ! Next
 
   }
@@ -64,22 +63,21 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
         }
       }
 
-    case e: Event =>
-      e match {
-        case found: Found =>
-          addToQueue(found)
+    case e: Event => e match {
 
-        case fetched @ Fetched(url, found) =>
-          logger.trace(s"Fetched $url")
-          markFetched(url)
-          addToQueue(found)
-          scheduleNext()
+      case found: Found =>
+        addToQueue(found)
 
-        case notFetched @ NotFetched(url, t) =>
-          logger.error(s"Could not fetch $url", t)
-          markFetched(url)
-          scheduleNext()
+      case fetched @ Fetched(url, found) =>
+        logger.trace(s"Fetched $url")
+        markFetched(url)
+        addToQueue(found)
+        scheduleNext()
 
+      case notFetched @ NotFetched(url, t) =>
+        logger.error(s"Could not fetch $url", t)
+        markFetched(url)
+        scheduleNext()
 
       }
       persist(e)(noop)
