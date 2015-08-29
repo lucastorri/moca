@@ -111,7 +111,7 @@ class Minion(work: Work, browser: Browser, repo: WorkRepo) extends PersistentAct
   }
 
   def finish(): Unit = {
-    parent ! Done
+    parent ! Done(work)
   }
   
   override val persistenceId: String = s"minion-$work"
