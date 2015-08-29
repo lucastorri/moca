@@ -1,23 +1,29 @@
 package com.github.lucastorri.moca.role.worker
 
 import akka.actor._
+import akka.pattern.ask
+import akka.util.{Timeout => AskTimeout}
+import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.browser.Browser
-import com.github.lucastorri.moca.role.Messages.{Ack, WorkDone, WorkOffer, WorkRequest}
+import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master
-import com.github.lucastorri.moca.role.worker.Worker.{Done, RequestWork, State}
-import com.github.lucastorri.moca.store.content.InMemContentRepo
+import com.github.lucastorri.moca.role.worker.Worker._
+import com.github.lucastorri.moca.store.content.{ContentRepo, InMemContentRepo}
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
   import context._
-
+  implicit val timeout: AskTimeout = 10.seconds
+  
   val requestWorkInterval = 5.minute
   val master = Master.proxy()
-  val repo = new InMemContentRepo
+  val repo: ContentRepo = new InMemContentRepo
+  var currentWork: Work = _
 
   override def preStart(): Unit = {
     logger.info("worker started")
@@ -34,7 +40,7 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
     case Event(WorkOffer(work), _) =>
       sender() ! Ack
-      //TODO check if not in progress already
+      currentWork = work
       actorOf(Props(new Minion(work, Browser.instance(), repo(work))))
       goto(State.Working) using Some(work)
 
@@ -42,13 +48,31 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
   when(State.Working) {
 
+    case Event(WorkOffer(work), _) =>
+      if (work == currentWork) sender() ! Ack
+      stay()
+
     case Event(Done(work), _) =>
       sender() ! PoisonPill
-      master ! WorkDone(work.id, repo.links(work))
+      def update =
+        for {
+          links <- repo.links(work)
+          ack <- master ? WorkDone(work.id, links)
+        } yield ack
+      retry(3)(update).acked().onComplete {
+        case Success(_) =>
+          self ! Finished
+        case Failure(t) =>
+          logger.error("Could not update master of finished work", t)
+          self ! Finished
+      }
+      stay()
+
+    case Event(Finished, _) =>
       goto(State.Idle) using None
 
   }
-
+  
   onTransition {
 
     case State.Idle -> State.Working =>
@@ -73,10 +97,12 @@ object Worker {
   sealed trait State
   object State {
     case object Working extends State
+    case object Finishing extends State
     case object Idle extends State
   }
 
   case object RequestWork
   case class Done(work: Work)
+  case object Finished
 
 }

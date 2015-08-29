@@ -14,8 +14,8 @@ class InMemContentRepo extends ContentRepo {
   override def apply(work: Work): WorkContentRepo =
     get(work)
 
-  override def links(work: Work): Set[ContentLink] =
-    get(work).links.toSet
+  override def links(work: Work): Future[Set[ContentLink]] =
+    Future.successful(get(work).links.toSet)
 
   private def get(work: Work): InMemWorkContentRepo =
     open.getOrElseUpdate(work, new InMemWorkContentRepo)

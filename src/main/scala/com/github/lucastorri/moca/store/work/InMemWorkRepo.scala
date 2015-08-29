@@ -18,7 +18,7 @@ class InMemWorkRepo extends WorkRepo {
   
   private val open = mutable.HashMap.empty[String, String]
 
-  override def next(): Future[Work] = {
+  override def available(): Future[Work] = {
     work.headOption match {
       case Some(seed) =>
         val id = Random.alphanumeric.take(16).mkString

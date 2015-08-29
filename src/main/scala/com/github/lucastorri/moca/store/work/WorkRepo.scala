@@ -6,7 +6,7 @@ import scala.concurrent.Future
 
 trait WorkRepo {
 
-  def next(): Future[Work]
+  def available(): Future[Work]
 
   def done(workId: String): Future[Unit]
 
