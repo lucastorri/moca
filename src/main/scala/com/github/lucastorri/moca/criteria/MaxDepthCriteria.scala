@@ -8,7 +8,7 @@ import com.github.lucastorri.moca.url.Url
 case class MaxDepthCriteria(criteria: LinkSelectionCriteria, maxDepth: Int) extends LinkSelectionCriteria {
 
   override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] =
-    if (link.depth + 1 >= maxDepth) Set.empty
+    if (link.depth > maxDepth) Set.empty
     else criteria.select(work, link, page)
 
 }
