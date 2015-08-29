@@ -57,7 +57,7 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
       def update =
         for {
           links <- repo.links(work)
-          ack <- master ? WorkDone(work.id, links)
+          ack <- master ? WorkFinished(work.id, links)
         } yield ack
       retry(3)(update).acked().onComplete {
         case Success(_) =>

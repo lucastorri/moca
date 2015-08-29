@@ -1,19 +1,18 @@
 package com.github.lucastorri.moca.role.master
 
 import akka.actor.ActorRef
-import com.github.lucastorri.moca.role.Work
 
 import scala.concurrent.duration.Deadline
 
 case class State(ongoingWork: Map[ActorRef, Set[OngoingWork]]) {
-  
-  def start(who: ActorRef, work: Work): State = {
-    val entry = who -> (get(who) + create(work))
+
+  def start(who: ActorRef, workId: String): State = {
+    val entry = who -> (get(who) + create(workId))
     copy(ongoingWork = ongoingWork + entry)
   }
 
-  def cancel(who: ActorRef, work: Work): State = {
-    val entry = who -> (get(who) - create(work))
+  def cancel(who: ActorRef, workId: String): State = {
+    val entry = who -> (get(who) - create(workId))
     copy(ongoingWork = ongoingWork + entry)
   }
 
@@ -24,12 +23,15 @@ case class State(ongoingWork: Map[ActorRef, Set[OngoingWork]]) {
     ongoingWork.getOrElse(who, Set.empty)
 
   def extendDeadline(toExtend: Map[ActorRef, Set[OngoingWork]]): State = {
-    val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.work)))
+    val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.workId)))
     copy(ongoingWork = ongoingWork ++ updates)
   }
 
-  private def create(work: Work): OngoingWork =
-    OngoingWork(work, Deadline.now + Master.pingInterval)
+  def done(who: ActorRef, workId: String): State =
+    cancel(who, workId)
+
+  private def create(workId: String): OngoingWork =
+    OngoingWork(workId, Deadline.now + Master.pingInterval)
 
 }
 
@@ -40,14 +42,14 @@ object State {
 
 }
 
-case class OngoingWork(work: Work, nextPing: Deadline) {
+case class OngoingWork(workId: String, nextPing: Deadline) {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case other: OngoingWork => other.work == work
+    case other: OngoingWork => other.workId == workId
     case _ => false
   }
 
-  override def hashCode: Int = work.hashCode()
+  override def hashCode: Int = workId.hashCode()
 
   def shouldPing: Boolean = nextPing.isOverdue()
 

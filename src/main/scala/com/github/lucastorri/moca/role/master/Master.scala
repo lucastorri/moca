@@ -3,13 +3,12 @@ package com.github.lucastorri.moca.role.master
 import akka.actor._
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.pattern.ask
-import akka.persistence.{RecoveryCompleted, SnapshotOffer, PersistentActor, SaveSnapshotSuccess}
+import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotSuccess, SnapshotOffer}
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.master.Master.Event.{WorkFailed, WorkStarted, WorkerTerminated}
-import com.github.lucastorri.moca.role.master.Master.{Event, CleanUp, Reply}
+import com.github.lucastorri.moca.role.master.Master.Event.{WorkDone, WorkFailed, WorkStarted, WorkerTerminated}
+import com.github.lucastorri.moca.role.master.Master.{CleanUp, Event, Reply}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -29,17 +28,16 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   } 
 
   override def receiveRecover: Receive = {
-    case e: Event => e match {
 
+    case e: Event => e match {
       case WorkStarted(who, work) =>
         state = state.start(who, work)
-
       case WorkFailed(who, work) =>
         state = state.cancel(who, work)
-
       case WorkerTerminated(who) =>
         state = state.cancel(who)
-      
+      case WorkDone(who, workId) =>
+        state = state.done(who, workId)
     }
     
     case SnapshotOffer(meta, s: State) =>
@@ -59,20 +57,20 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       works.available().foreach { work => self ! Reply(who, WorkOffer(work)) }
 
     case Reply(who, offer) =>
-      persist(WorkStarted(who, offer.work)) { ws =>
+      persist(WorkStarted(who, offer.work.id)) { ws =>
         retry(3)(ws.who ? offer).acked.onComplete {
           case Success(_) =>
             self ! ws
           case Failure(t) =>
-            logger.error(s"Could not start work ${ws.work.id} ${ws.work.seed} for $who", t)
-            self ! WorkFailed(ws.who, ws.work)
+            logger.error(s"Could not start work ${ws.workId} ${offer.work.seed} for $who", t)
+            self ! WorkFailed(ws.who, ws.workId)
         }
       }
 
     case Terminated(who) =>
       logger.info(s"Worker down: $who")
       persist(WorkerTerminated(who))(noop)
-      works.releaseAll(state.get(who).map(_.work))
+      works.releaseAll(state.get(who).map(_.workId))
       state = state.cancel(who)
 
     case CleanUp =>
@@ -82,8 +80,8 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       val toExtend = state.ongoingWork.map { case (who, all) =>
         val toPing = all.filter(_.shouldPing)
         toPing.foreach { ongoing =>
-          retry(3)(who ? InProgress(ongoing.work.id)).acked
-            .onFailure { case f => self ! WorkFailed(who, ongoing.work) }
+          retry(3)(who ? InProgress(ongoing.workId)).acked
+            .onFailure { case f => self ! WorkFailed(who, ongoing.workId) }
         }
         who -> toPing
       }
@@ -94,23 +92,23 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     case SaveSnapshotSuccess(meta) =>
       //TODO delete old snapshots and events
 
-    case fail @ WorkFailed(who, work) =>
+    case fail @ WorkFailed(who, workId) =>
       persist(fail)(noop)
-      state = state.cancel(who, work)
-      works.release(work.id)
+      state = state.cancel(who, workId)
+      works.release(workId)
 
-    case WorkStarted(who, work) =>
-      logger.info(s"Work started ${work.id} ${work.seed}")
-      state = state.start(who, work)
+    case WorkStarted(who, workId) =>
+      logger.info(s"Work started $workId")
+      state = state.start(who, workId)
       watch(who)
 
-    case done @ WorkDone(workId, links) =>
+    case WorkFinished(workId, links) =>
       logger.info(s"Work done $workId")
-      persist(done)(noop)
-      sender() ! Ack
-
-      //TODO save links
-      works.done(workId)
+      val who = sender()
+      persist(WorkDone(who, workId))(noop)
+      state = state.done(who, workId)
+      who ! Ack
+      works.done(workId) //TODO handle //TODO save links
 
   }
     
@@ -141,10 +139,10 @@ object Master {
 
   sealed trait Event
   object Event {
-    case class WorkStarted(who: ActorRef, work: Work) extends Event
-    case class WorkFailed(who: ActorRef, work: Work)
+    case class WorkStarted(who: ActorRef, workId: String) extends Event
+    case class WorkFailed(who: ActorRef, workId: String)
     case class WorkerTerminated(who: ActorRef) extends Event
-
+    case class WorkDone(who: ActorRef, workId: String)
   }
 
   case object CleanUp

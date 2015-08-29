@@ -40,7 +40,7 @@ class InMemWorkRepo extends WorkRepo {
     Future.successful(())
   }
 
-  override def releaseAllIds(ids: Set[String]): Future[Unit] = {
+  override def releaseAll(ids: Set[String]): Future[Unit] = {
     ids.foreach(release)
     Future.successful(())
   }

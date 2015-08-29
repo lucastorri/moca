@@ -9,7 +9,7 @@ object Messages {
   case object WorkRequest
   case class WorkOffer(work: Work)
   case object Ack
-  case class WorkDone(workId: String, contentLinks: Set[ContentLink])
+  case class WorkFinished(workId: String, contentLinks: Set[ContentLink])
   case class InProgress(workId: String)
 
   implicit class Acked(future: Future[Any]) {

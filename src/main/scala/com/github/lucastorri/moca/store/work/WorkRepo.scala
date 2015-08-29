@@ -12,10 +12,7 @@ trait WorkRepo {
 
   def release(workId: String): Future[Unit]
 
-  def releaseAll(workSet: Set[Work]): Future[Unit] =
-    releaseAllIds(workSet.map(_.id))
-
-  def releaseAllIds(workIds: Set[String]): Future[Unit]
+  def releaseAll(workIds: Set[String]): Future[Unit]
 
 }
 
