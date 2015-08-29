@@ -8,13 +8,13 @@ import scala.concurrent.Future
 
 trait ContentRepo {
 
-  def apply(work: Work): WorkRepo
+  def apply(work: Work): WorkContentRepo
 
   def links(work: Work): Set[ContentLink]
 
 }
 
-trait WorkRepo {
+trait WorkContentRepo {
 
   def save(url: Url, content: Content): Future[Unit]
   

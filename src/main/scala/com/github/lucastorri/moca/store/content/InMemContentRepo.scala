@@ -9,20 +9,20 @@ import scala.concurrent.Future
 
 class InMemContentRepo extends ContentRepo {
 
-  private val open = mutable.HashMap.empty[Work, InMemWorkRepo]
+  private val open = mutable.HashMap.empty[Work, InMemWorkContentRepo]
 
-  override def apply(work: Work): WorkRepo =
+  override def apply(work: Work): WorkContentRepo =
     get(work)
 
   override def links(work: Work): Set[ContentLink] =
     get(work).links.toSet
 
-  private def get(work: Work): InMemWorkRepo =
-    open.getOrElseUpdate(work, new InMemWorkRepo)
+  private def get(work: Work): InMemWorkContentRepo =
+    open.getOrElseUpdate(work, new InMemWorkContentRepo)
 
 }
 
-class InMemWorkRepo extends WorkRepo {
+class InMemWorkContentRepo extends WorkContentRepo {
 
   private[content] val links = mutable.HashSet.empty[ContentLink]
 

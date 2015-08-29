@@ -7,7 +7,7 @@ import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.worker.Minion.Event.{Fetched, Found, NotFetched}
 import com.github.lucastorri.moca.role.worker.Minion.{Event, Next}
 import com.github.lucastorri.moca.role.worker.Worker.Done
-import com.github.lucastorri.moca.store.content.WorkRepo
+import com.github.lucastorri.moca.store.content.WorkContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -15,7 +15,7 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class Minion(work: Work, browser: Browser, repo: WorkRepo) extends PersistentActor with StrictLogging {
+class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends PersistentActor with StrictLogging {
 
   import context._
 
