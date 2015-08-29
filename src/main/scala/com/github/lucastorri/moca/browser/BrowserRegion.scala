@@ -89,6 +89,7 @@ object BrowserRegion extends StrictLogging {
 
   URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
 
+  val headless = true
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
 
@@ -100,7 +101,7 @@ object BrowserRegion extends StrictLogging {
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
     val promise = Promise[BrowserRegion]()
     if (pool.isEmpty) {
-      spawn(BrowserWebView.run(newId, true)).onFailure { case e =>
+      spawn(BrowserWebView.run(newId, headless)).onFailure { case e =>
         logger.error("Could not start browser", e)
       }
       awaiting += promise

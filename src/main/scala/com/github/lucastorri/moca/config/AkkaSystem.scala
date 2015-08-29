@@ -8,10 +8,10 @@ object AkkaSystem extends StrictLogging {
 
   def fromConfig(config: MocaConfig): ActorSystem = {
 
+    val roles = stringArray(config.roles)
     val hostname =
       if (config.hasSeeds) quote(config.hostname)
       else quote("127.0.0.1")
-    val roles = stringArray(config.roles)
     val seeds =
       if (config.hasSeeds) stringArray(config.seeds.map(hostAndPort => seed(config.systemName, hostAndPort)))
       else stringArray(seed(config.systemName, s"127.0.0.1:${config.port}"))

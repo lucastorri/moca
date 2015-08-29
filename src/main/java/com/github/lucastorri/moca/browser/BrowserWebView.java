@@ -25,7 +25,7 @@ public class BrowserWebView extends Application {
             System.setProperty("prism.order", "sw");
             new ToolkitApplicationLauncher().launch(BrowserWebView.class, id);
         } else {
-            launch();
+            launch(id);
         }
     }
 
