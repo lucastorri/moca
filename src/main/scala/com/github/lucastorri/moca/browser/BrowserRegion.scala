@@ -31,9 +31,9 @@ class BrowserRegion private[browser](val id: String) extends Region {
 
   val settings = BrowserRegion.settings(this)
 
-  webEngine.setJavaScriptEnabled(settings.enableJavaScript)
   getChildren.add(browser)
-
+  webEngine.setUserAgent(settings.userAgent)
+  webEngine.setJavaScriptEnabled(settings.enableJavaScript)
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
       if (event.getValue == JFXWorker.State.SUCCEEDED) {

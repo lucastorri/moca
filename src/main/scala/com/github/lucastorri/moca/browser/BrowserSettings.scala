@@ -6,5 +6,6 @@ case class BrowserSettings(
   width: Int,
   height: Int,
   enableJavaScript: Boolean,
-  charset: Charset
+  charset: Charset,
+  userAgent: String
 )

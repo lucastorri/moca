@@ -12,7 +12,8 @@ class InMemWorkRepo extends WorkRepo {
   private val work = mutable.HashSet(
 //    "http://www.nokia.com/",
 //    "http://www.here.com/",
-    "http://www.example.com/"
+//    "http://www.example.com/",
+    "http://localhost:8000/"
   )
   
   private val open = mutable.HashMap.empty[String, String]

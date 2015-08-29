@@ -14,7 +14,11 @@ trait Browser {
 
 object Browser {
 
-  val defaultSettings = BrowserSettings(1024, 768, enableJavaScript = false, StandardCharsets.UTF_8)
+  val defaultSettings = BrowserSettings(
+    1024, 768,
+    enableJavaScript = false,
+    StandardCharsets.UTF_8,
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.125 Safari/537.36")
 
   def instance()(implicit exec: ExecutionContext): Browser = new Browser {
     override def goTo[T](url: Url)(f: (RenderedPage) => T): Future[T] = {
