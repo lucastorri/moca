@@ -8,8 +8,7 @@ case class MocaConfig(
   seeds: Set[String] = Set.empty,
   roles: Set[String] = MocaConfig.availableRoles,
   port: Int = 1731,
-  hostname: String = "",
-  singletonPort: Int = 8888
+  hostname: String = ""
 ) {
 
   def hasSeeds: Boolean = seeds.nonEmpty
@@ -46,10 +45,6 @@ object MocaConfig {
     opt[String]('h', "hostname")
       .text("main system hostname")
       .action { (h, c) => c.copy(hostname = h) }
-
-    opt[Int]('P', "singleton-port")
-      .text("port of the singleton cluster")
-      .action { (p, c) => c.copy(singletonPort = p) }
 
     opt[Seq[String]]('R', "roles")
       .text("roles of this instance")
