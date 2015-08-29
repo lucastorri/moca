@@ -1,6 +1,8 @@
 package com.github.lucastorri.moca.browser
 
 import java.io.StringWriter
+import java.net.{Proxy, URL, URLConnection, URLStreamHandler, URLStreamHandlerFactory}
+import java.nio.CharBuffer
 import javafx.application.Platform
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.concurrent.Worker.State
@@ -8,16 +10,14 @@ import javafx.concurrent.{Worker => JFXWorker}
 import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 import javafx.scene.web.WebView
-import javax.xml.transform.{OutputKeys, TransformerFactory}
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
+import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
-import org.jsoup.Jsoup
 
-import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.Random
@@ -45,7 +45,7 @@ class BrowserRegion private[browser](val id: String) extends Region {
   def goTo(url: Url): Future[RenderedPage] = {
     this.current = url
     this.promise = Promise[RenderedPage]()
-    Platform.runLater(runnable(webEngine.load(url.url)))
+    Platform.runLater(runnable(webEngine.load(url.toString)))
     promise.future
   }
 
@@ -58,18 +58,20 @@ class BrowserRegion private[browser](val id: String) extends Region {
   protected override def computePrefHeight(width: Double): Double =
     settings.height
 
-  case class InternalRenderedPage(url: Url) extends RenderedPage {
+  case class InternalRenderedPage(originalUrl: Url) extends RenderedPage {
 
-    override def links: Set[Url] = {
-      Jsoup.parse(content, webEngine.getLocation)
-        .select("a")
-        .map(a => a.attr("abs:href").trim)
-        .filter(_.nonEmpty)
-        .map(link => Url(link))
-        .toSet
+    override def currentUrl: Url =
+      Url.parse(webEngine.getLocation).getOrElse(originalUrl)
+
+    override def exec(javascript: String): AnyRef =
+      webEngine.executeScript(javascript)
+
+    override def content: Content = {
+      val buffer = settings.charset.newEncoder().encode(CharBuffer.wrap(html))
+      Content(buffer, "text/html")
     }
 
-    override def content: String = {
+    def html: String = {
       val src = new DOMSource(webEngine.getDocument)
       val writer = new StringWriter()
       val transformer = TransformerFactory.newInstance().newTransformer()
@@ -84,6 +86,8 @@ class BrowserRegion private[browser](val id: String) extends Region {
 }
 
 object BrowserRegion extends StrictLogging {
+
+  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
 
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
@@ -117,7 +121,44 @@ object BrowserRegion extends StrictLogging {
 
 }
 
-/*
+class MocaURLStreamHandlerFactory extends URLStreamHandlerFactory {
+
+  override def createURLStreamHandler(protocol: String): URLStreamHandler = protocol match {
+    case "http" => new HttpHandler
+    case "https" => new HttpsHandler
+    case _ => null
+  }
+
+}
+
+class HttpHandler extends sun.net.www.protocol.http.Handler with StrictLogging {
+
+  protected override def openConnection(url: URL): URLConnection = {
+    logger.trace(s"Fetching $url")
+    super.openConnection(url)
+  }
+
+  protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
+    logger.trace(s"Fetching $url")
+    super.openConnection(url, proxy)
+  }
+
+}
+
+class HttpsHandler extends sun.net.www.protocol.https.Handler with StrictLogging {
+
+  protected override def openConnection(url: URL): URLConnection = {
+    logger.trace(s"Fetching $url")
+    super.openConnection(url)
+  }
+
+  protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
+    logger.trace(s"Fetching $url")
+    super.openConnection(url, proxy)
+  }
+}
+
+  /*
     URL.setURLStreamHandlerFactory(new URLStreamHandlerFactory() {
       def createURLStreamHandler(protocol: String): URLStreamHandler = {
         System.out.println(protocol)
@@ -170,4 +211,4 @@ object BrowserRegion extends StrictLogging {
     val proxy: URLConnection = java.lang.reflect.Proxy.newProxyInstance(classOf[URLConnection].getClassLoader, Array[Class[_]](classOf[URLConnection]), handler).asInstanceOf[URLConnection]
     return proxy
   }
- */
+*/

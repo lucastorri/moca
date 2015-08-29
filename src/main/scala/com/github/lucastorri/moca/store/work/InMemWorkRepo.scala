@@ -3,8 +3,8 @@ package com.github.lucastorri.moca.store.work
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.url.Url
 
-import scala.concurrent.Future
 import scala.collection.mutable
+import scala.concurrent.Future
 import scala.util.Random
 
 class InMemWorkRepo extends WorkRepo {

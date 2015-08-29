@@ -26,7 +26,7 @@ object Moca extends App {
 
   Master.join(new InMemWorkRepo)
 
-  //TODO start only if it's not a master
+  //TODO start only if it's not a master: have a different system for them, if is/isn't master, just terminate/start it
   (1 to 2).foreach(Worker.start)
 
 }

@@ -4,10 +4,14 @@ import com.github.lucastorri.moca.url.Url
 
 trait RenderedPage {
 
-  def url: Url
+  def originalUrl: Url
 
-  def content: String
+  def currentUrl: Url
 
-  def links: Set[Url]
+  def content: Content
+
+  def html: String
+
+  def exec(javascript: String): AnyRef
 
 }

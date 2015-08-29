@@ -5,7 +5,7 @@ import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerS
 import akka.pattern.ask
 import akka.persistence.PersistentActor
 import akka.util.Timeout
-import com.github.lucastorri.moca.async.{retry, noop}
+import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages.{Ack, WorkDone, WorkOffer, WorkRequest}
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master.Event.{GoingDown, WorkNotAccepted, WorkStarted, WorkerTerminated}
@@ -71,8 +71,9 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       state = state.start(who, work)
       watch(ws.who)
 
-    case WorkDone(workId) =>
+    case WorkDone(workId, links) =>
       logger.info(s"Work done $workId")
+      //TODO save links
       works.done(workId)
 
   }
