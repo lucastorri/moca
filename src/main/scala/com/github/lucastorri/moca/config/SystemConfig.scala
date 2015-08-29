@@ -35,8 +35,6 @@ object SystemConfig {
       |}
       """.stripMargin
 
-    println(cfg)
-
     ConfigFactory.parseString(cfg)
       .withFallback(ConfigFactory.parseResourcesAnySyntax("store.conf"))
       .resolve()
