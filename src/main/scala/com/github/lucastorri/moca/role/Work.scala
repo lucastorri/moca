@@ -1,7 +1,7 @@
 package com.github.lucastorri.moca.role
 
 import com.github.lucastorri.moca.browser.RenderedPage
-import com.github.lucastorri.moca.browser.criteria.{JSoupCriteria, LinkSelectionCriteria, MaxDepthCriteria}
+import com.github.lucastorri.moca.criteria.{JSoupCriteria, LinkSelectionCriteria, MaxDepthCriteria}
 import com.github.lucastorri.moca.role.worker.OutLink
 import com.github.lucastorri.moca.url.Url
 

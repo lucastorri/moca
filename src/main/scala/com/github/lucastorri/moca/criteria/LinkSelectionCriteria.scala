@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.browser.criteria
+package com.github.lucastorri.moca.criteria
 
 import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.role.Work
