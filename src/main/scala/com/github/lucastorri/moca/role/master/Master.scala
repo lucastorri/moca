@@ -30,10 +30,10 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def receiveRecover: Receive = {
 
     case e: Event => e match {
-      case WorkStarted(who, work) =>
-        state = state.start(who, work)
-      case WorkFailed(who, work) =>
-        state = state.cancel(who, work)
+      case WorkStarted(who, workId) =>
+        state = state.start(who, workId)
+      case WorkFailed(who, workId) =>
+        state = state.cancel(who, workId)
       case WorkerTerminated(who) =>
         state = state.cancel(who)
       case WorkDone(who, workId) =>
@@ -140,9 +140,9 @@ object Master {
   sealed trait Event
   object Event {
     case class WorkStarted(who: ActorRef, workId: String) extends Event
-    case class WorkFailed(who: ActorRef, workId: String)
+    case class WorkFailed(who: ActorRef, workId: String) extends Event
     case class WorkerTerminated(who: ActorRef) extends Event
-    case class WorkDone(who: ActorRef, workId: String)
+    case class WorkDone(who: ActorRef, workId: String) extends Event
   }
 
   case object CleanUp

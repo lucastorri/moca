@@ -76,10 +76,10 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
   onTransition {
 
     case State.Idle -> State.Working =>
-      log.info(s"Starting work $nextStateData")
+      logger.info(s"Starting work $nextStateData")
 
     case State.Working -> State.Idle =>
-      log.info(s"Work done $stateData")
+      logger.info(s"Work done $stateData")
       self ! RequestWork
 
   }

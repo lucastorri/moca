@@ -123,6 +123,8 @@ object BrowserRegion extends StrictLogging {
 
 class MocaURLStreamHandlerFactory extends URLStreamHandlerFactory {
 
+  //TODO cache downloaded content, so if criteria selects an image, etc, they can be downloaded from the cache
+
   override def createURLStreamHandler(protocol: String): URLStreamHandler = protocol match {
     case "http" => new HttpHandler
     case "https" => new HttpsHandler
@@ -156,6 +158,7 @@ class HttpsHandler extends sun.net.www.protocol.https.Handler with StrictLogging
     logger.trace(s"Fetching $url")
     super.openConnection(url, proxy)
   }
+
 }
 
   /*
