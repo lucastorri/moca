@@ -117,8 +117,8 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     
 
   override val persistenceId: String = s"${Master.name}-persistence"
-  override def journalPluginId: String = "store.mem-journal"
-  override def snapshotPluginId: String = "store.mem-snapshot"
+  override def journalPluginId: String = system.settings.config.getString("moca.master.journal-plugin-id")
+  override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 }
 
 object Master {

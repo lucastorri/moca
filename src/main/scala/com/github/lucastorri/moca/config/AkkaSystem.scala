@@ -37,6 +37,19 @@ object AkkaSystem extends StrictLogging {
       |  }
       |
       |}
+      |
+      |moca {
+      |
+      |  minion {
+      |    journal-plugin-id = "store.mem-journal"
+      |  }
+      |
+      |  master {
+      |    journal-plugin-id = "store.mem-journal"
+      |    snapshot-plugin-id = "store.mem-snapshot"
+      |  }
+      |
+      |}
       """.stripMargin
 
     logger.debug(s"Config: \n$cfg")

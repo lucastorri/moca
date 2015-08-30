@@ -114,7 +114,7 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
   }
   
   override val persistenceId: String = s"minion-${work.id}"
-  override def journalPluginId: String = "store.mem-journal"
+  override def journalPluginId: String = system.settings.config.getString("moca.minion.journal-plugin-id")
 
 }
 
