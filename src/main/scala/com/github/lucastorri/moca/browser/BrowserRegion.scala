@@ -41,7 +41,7 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
       }
     }
   })
-  Platform.runLater(runnable(BrowserRegion.release(this)))
+  BrowserRegion.release(this)
 
   def goTo(url: Url): Future[RenderedPage] = {
     logger.trace(s"Region $id goTo $url")
@@ -89,7 +89,7 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
 
 object BrowserRegion extends StrictLogging {
 
-  val headless = false
+  val headless = true
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
   private val main = Promise[BrowserWebView]()
