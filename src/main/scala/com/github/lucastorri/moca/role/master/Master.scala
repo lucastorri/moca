@@ -3,7 +3,7 @@ package com.github.lucastorri.moca.role.master
 import akka.actor._
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.pattern.ask
-import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotSuccess, SnapshotOffer}
+import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
@@ -21,6 +21,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   implicit val timeout: Timeout = 10.seconds
 
   var state = State.initial()
+  var journalNumberOnSnapshot = 0L
 
   override def preStart(): Unit = {
     logger.info("Master started")
@@ -76,6 +77,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     case CleanUp =>
       logger.trace("Clean up")
       saveSnapshot(state)
+      journalNumberOnSnapshot = lastSequenceNr
 
       val toExtend = state.ongoingWork.map { case (who, all) =>
         val toPing = all.filter(_.shouldPing)
@@ -90,7 +92,8 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       //TODO check if any work that was made available is not on the current state
 
     case SaveSnapshotSuccess(meta) =>
-      //TODO delete old snapshots and events
+      deleteMessages(journalNumberOnSnapshot)
+      deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case fail @ WorkFailed(who, workId) =>
       persist(fail)(noop)
