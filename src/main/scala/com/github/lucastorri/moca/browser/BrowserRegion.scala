@@ -22,15 +22,15 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.Random
 
-class BrowserRegion private[browser](val id: String) extends Region {
+class BrowserRegion private[browser](settings: BrowserSettings) extends Region with StrictLogging {
 
+  val id = Random.alphanumeric.take(32).mkString
   private val browser = new WebView
   private val webEngine = browser.getEngine
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
 
-  val settings = BrowserRegion.settings(this)
-
+  logger.trace(s"Region $id starting")
   getChildren.add(browser)
   webEngine.setUserAgent(settings.userAgent)
   webEngine.setJavaScriptEnabled(settings.enableJavaScript)
@@ -41,8 +41,10 @@ class BrowserRegion private[browser](val id: String) extends Region {
       }
     }
   })
+  Platform.runLater(runnable(BrowserRegion.release(this)))
 
   def goTo(url: Url): Future[RenderedPage] = {
+    logger.trace(s"Region $id goTo $url")
     this.current = url
     this.promise = Promise[RenderedPage]()
     Platform.runLater(runnable(webEngine.load(url.toString)))
@@ -87,38 +89,41 @@ class BrowserRegion private[browser](val id: String) extends Region {
 
 object BrowserRegion extends StrictLogging {
 
-  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
-
-  val headless = true
+  val headless = false
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
+  private val main = Promise[BrowserWebView]()
 
-  private[browser] def settings(region: BrowserRegion): BrowserSettings = synchronized {
-    release(region)
-    Browser.defaultSettings
+  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
+  Platform.setImplicitExit(false)
+  spawn {
+    try BrowserWebView.start(headless)
+    catch { case e: Exception => logger.error("Could not start browser", e) }
   }
+
+
+  //TODO make private (move BrowserWebView to scala, make this private[browser])
+  def register(view: BrowserWebView): Unit =
+    main.success(view)
 
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
     val promise = Promise[BrowserRegion]()
     if (pool.isEmpty) {
-      spawn(BrowserWebView.run(newId, headless)).onFailure { case e =>
-        logger.error("Could not start browser", e)
-      }
+      main.future.foreach(_.newWindow(Browser.defaultSettings))
       awaiting += promise
     } else {
       val region = pool.head
-      promise.success(region)
       pool.remove(region)
+      promise.success(region)
     }
     promise.future
   }
 
   private[browser] def release(region: BrowserRegion): Unit = synchronized {
+    logger.trace(s"Release ${region.id}")
     if (awaiting.nonEmpty) awaiting.remove(0).success(region)
     else pool += region
   }
-
-  private def newId = Random.alphanumeric.take(32).mkString
 
 }
 

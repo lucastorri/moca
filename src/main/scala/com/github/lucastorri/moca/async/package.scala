@@ -1,5 +1,8 @@
 package com.github.lucastorri.moca
 
+import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
+
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 
@@ -24,6 +27,13 @@ package object async {
 
     retries(times)
     p.future
+  }
+
+  def timeout[T](deadline: FiniteDuration)(future: => Future[T])(implicit ctx: ExecutionContext): Future[T] = {
+    val promise = Promise[T]()
+    Executors.newScheduledThreadPool(1)
+      .schedule(runnable(promise.failure(new TimeoutException("Future timed out"))), deadline.toMillis, TimeUnit.MILLISECONDS)
+    Future.firstCompletedOf(Seq(future, promise.future))
   }
 
   def runnable(f: => Unit): Runnable =
