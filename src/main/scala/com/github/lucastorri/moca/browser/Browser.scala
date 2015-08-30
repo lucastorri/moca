@@ -2,12 +2,12 @@ package com.github.lucastorri.moca.browser
 
 import java.nio.charset.StandardCharsets
 
+import com.github.lucastorri.moca.async.timeout
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import com.github.lucastorri.moca.async.timeout
+import scala.concurrent.{ExecutionContext, Future}
 
 trait Browser {
 

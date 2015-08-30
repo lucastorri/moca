@@ -41,7 +41,6 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
       }
     }
   })
-  BrowserRegion.release(this)
 
   def goTo(url: Url): Future[RenderedPage] = {
     logger.trace(s"Region $id goTo $url")
@@ -92,18 +91,17 @@ object BrowserRegion extends StrictLogging {
   val headless = true
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
-  private val main = Promise[BrowserWebView]()
+  private val main = Promise[BrowserApplication]()
 
   URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
   Platform.setImplicitExit(false)
   spawn {
-    try BrowserWebView.start(headless)
+    try BrowserLauncher.launch(headless)
     catch { case e: Exception => logger.error("Could not start browser", e) }
   }
 
 
-  //TODO make private (move BrowserWebView to scala, make this private[browser])
-  def register(view: BrowserWebView): Unit =
+  private[browser] def register(view: BrowserApplication): Unit =
     main.success(view)
 
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
