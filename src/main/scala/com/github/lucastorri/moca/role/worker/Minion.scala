@@ -109,10 +109,11 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
   }
 
   def finish(): Unit = {
+    deleteMessages(lastSequenceNr)
     parent ! Done(work)
   }
   
-  override val persistenceId: String = s"minion-$work"
+  override val persistenceId: String = s"minion-${work.id}"
   override def journalPluginId: String = "store.mem-journal"
 
 }
