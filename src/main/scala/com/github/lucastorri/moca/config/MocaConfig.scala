@@ -1,5 +1,7 @@
 package com.github.lucastorri.moca.config
 
+import java.io.File
+
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 
@@ -9,7 +11,8 @@ case class MocaConfig(
   roles: Set[String] = MocaConfig.availableRoles,
   port: Int = 1731,
   hostname: String = "",
-  workers: Int = 10
+  workers: Int = 10,
+  extraConfig: Option[File] = Option.empty
 ) {
 
   def isNotSingleInstance: Boolean =
@@ -63,7 +66,12 @@ object MocaConfig {
     opt[Int]('w', "workers")
       .text("number of workers to be spawned")
       .action { (w, c) => c.copy(workers = w) }
-    
+
+    opt[File]('c', "config")
+      .text("extra conf file")
+      .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
+      .action { (f, c) => c.copy(extraConfig = Some(f)) }
+
   }
 
   def parse(args: Array[String]): MocaConfig =

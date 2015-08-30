@@ -41,8 +41,13 @@ object AkkaSystem extends StrictLogging {
 
     logger.debug(s"Config: \n$cfg")
 
+    val extra = config.extraConfig match {
+      case Some(f) => ConfigFactory.parseFile(f)
+      case None => ConfigFactory.parseString("")
+    }
+
     ActorSystem(config.systemName,
-      ConfigFactory.parseString(cfg)
+      extra.withFallback(ConfigFactory.parseString(cfg))
         .withFallback(ConfigFactory.parseResourcesAnySyntax("store.conf"))
         .resolve())
   }
