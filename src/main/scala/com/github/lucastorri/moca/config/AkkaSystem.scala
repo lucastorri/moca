@@ -10,10 +10,10 @@ object AkkaSystem extends StrictLogging {
 
     val roles = stringArray(config.roles)
     val hostname =
-      if (config.hasSeeds) quote(config.hostname)
+      if (config.isNotSingleInstance) quote(config.hostname)
       else quote("127.0.0.1")
     val seeds =
-      if (config.hasSeeds) stringArray(config.seeds.map(hostAndPort => seed(config.systemName, hostAndPort)))
+      if (config.isNotSingleInstance) stringArray(config.seeds.map(hostAndPort => seed(config.systemName, hostAndPort)))
       else stringArray(seed(config.systemName, s"127.0.0.1:${config.port}"))
 
     val cfg = s"""

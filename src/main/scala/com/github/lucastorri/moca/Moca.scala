@@ -7,12 +7,17 @@ import com.github.lucastorri.moca.store.work.InMemWorkRepo
 
 object Moca extends App {
 
-  implicit val system = AkkaSystem.fromConfig(MocaConfig.parse(args))
+  val config = MocaConfig.parse(args)
+  
+  implicit val system = AkkaSystem.fromConfig(config)
 
-  Master.join(new InMemWorkRepo)
+  if (config.hasRole(Master.role)) {
+    Master.join(new InMemWorkRepo)
+  }
 
-  //TODO start only if it's not a master: have a different system for them, if is/isn't master, just terminate/start it
-  (1 to 2).foreach(Worker.start)
+  if (config.hasRole(Worker.role)) {
+    (1 to config.workers).foreach(Worker.start)
+  }
 
   sys.addShutdownHook {
     system.terminate()

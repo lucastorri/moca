@@ -8,10 +8,15 @@ case class MocaConfig(
   seeds: Set[String] = Set.empty,
   roles: Set[String] = MocaConfig.availableRoles,
   port: Int = 1731,
-  hostname: String = ""
+  hostname: String = "",
+  workers: Int = 10
 ) {
 
-  def hasSeeds: Boolean = seeds.nonEmpty
+  def isNotSingleInstance: Boolean =
+    seeds.nonEmpty
+
+  def hasRole(role: String): Boolean =
+    roles.contains(role)
 
 }
 
@@ -55,6 +60,10 @@ object MocaConfig {
       .text("list roles available and exit")
       .action { (_, c) => println(availableRoles); sys.exit(0) }
 
+    opt[Int]('w', "workers")
+      .text("number of workers to be spawned")
+      .action { (w, c) => c.copy(workers = w) }
+    
   }
 
   def parse(args: Array[String]): MocaConfig =

@@ -127,7 +127,10 @@ object BrowserRegion extends StrictLogging {
 
 class MocaURLStreamHandlerFactory extends URLStreamHandlerFactory {
 
-  //TODO cache downloaded content, so if criteria selects an image, etc, they can be downloaded from the cache
+  /*TODO
+   * cache downloaded content, so if criteria selects an image, etc, they can be downloaded from the cache.
+   * Use that to also retrieve the headers of the original request.
+   */
 
   override def createURLStreamHandler(protocol: String): URLStreamHandler = protocol match {
     case "http" => new HttpHandler
