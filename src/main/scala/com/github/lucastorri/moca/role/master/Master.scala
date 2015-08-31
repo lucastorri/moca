@@ -47,6 +47,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     
     case RecoveryCompleted =>
       logger.info("Recovered")
+      logger.trace(s"State is $state")
       self ! CleanUp
 
   }

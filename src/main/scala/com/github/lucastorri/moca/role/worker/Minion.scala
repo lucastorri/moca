@@ -22,6 +22,10 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
   private val downloaded = mutable.HashSet.empty[Int]
   private val outstanding = mutable.LinkedHashSet.empty[OutLink]
 
+  override def preStart(): Unit = {
+    logger.trace(s"Minion started to work on ${work.id}")
+  }
+
   override def receiveRecover: Receive = {
 
     case e: Event => e match {

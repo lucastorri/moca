@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import akka.persistence.snapshot.SnapshotStore
 import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
+import com.github.lucastorri.moca.store.serialization.KryoSerialization
 import com.typesafe.config.Config
 import org.mapdb.DBMaker
 
@@ -53,16 +54,16 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
     result
   }
 
-  private case class DBUnit(persistenceId: String) {
+  private case class DBUnit(persistenceId: String) extends KryoSerialization[Any](system) {
 
-    private val map = db.hashMap[SnapshotMetadata, Any](s"snapshots-$persistenceId")
+    private val map = db.hashMap[SnapshotMetadata, Array[Byte]](s"snapshots-$persistenceId")
 
     def add(meta: SnapshotMetadata, snapshot: Any): Unit =
-      map.put(meta, snapshot)
+      map.put(meta, serialize(snapshot))
 
     def select(criteria: SnapshotSelectionCriteria): Option[SelectedSnapshot] =
       map.find { case (meta, _) => matches(meta, criteria) }
-        .map { case (meta, snapshot) => SelectedSnapshot(meta, snapshot) }
+        .map { case (meta, snapshot) => SelectedSnapshot(meta, deserialize(snapshot)) }
 
     def delete(meta: SnapshotMetadata): Unit =
       map.remove(meta)
@@ -71,6 +72,7 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
       map.keySet().foreach(meta => if (matches(meta, criteria)) map.remove(meta))
 
     def matches(meta: SnapshotMetadata, criteria: SnapshotSelectionCriteria): Boolean =
+      meta != null &&
       meta.sequenceNr >= criteria.minSequenceNr && meta.sequenceNr <= criteria.maxSequenceNr &&
       meta.timestamp >= criteria.minTimestamp && meta.timestamp <= criteria.maxTimestamp
 
