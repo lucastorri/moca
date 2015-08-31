@@ -46,10 +46,12 @@ class MapDBWorkRepo extends WorkRepo with StrictLogging {
   }
 
   override def done(workId: String): Future[Unit] = transaction {
+    logger.trace(s"done $workId")
     open.remove(workId)
   }
 
   override def release(workId: String): Future[Unit] = transaction {
+    logger.trace(s"release $workId")
     Option(open.remove(workId)).foreach(seed => work.put(workId, seed))
   }
 
@@ -57,7 +59,7 @@ class MapDBWorkRepo extends WorkRepo with StrictLogging {
     ids.foreach(release)
   }
 
-  private def transaction[T](f: => T): Future[T] = Future.fromTry{
+  private def transaction[T](f: => T): Future[T] = Future.fromTry {
     val result = Try(f)
     if (result.isSuccess) db.commit() else db.rollback()
     result

@@ -41,7 +41,6 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
         markFetched(url)
 
     }
-    logger.trace(s"Event $e")
 
     case RecoveryCompleted =>
       if (downloaded.isEmpty) self ! Found(0, Set(work.seed))

@@ -20,13 +20,14 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   import context._
   implicit val timeout: Timeout = 10.seconds
 
-  var state = State.initial()
-  var journalNumberOnSnapshot = 0L
+  private var state = State.initial()
+  private var journalNumberOnSnapshot = 0L
+  private var firstClean = true
 
   override def preStart(): Unit = {
     logger.info("Master started")
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
-  } 
+  }
 
   override def receiveRecover: Receive = {
 
@@ -81,19 +82,22 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       journalNumberOnSnapshot = lastSequenceNr
 
       val toExtend = state.ongoingWork.map { case (who, all) =>
-        val toPing = all.filter(_.shouldPing)
+        val toPing = all.filter(_.shouldPing || firstClean)
         toPing.foreach { ongoing =>
-          retry(3)(who ? InProgress(ongoing.workId)).acked
-            .onFailure { case f => self ! WorkFailed(who, ongoing.workId) }
+          retry(3)(who ? InProgress(ongoing.workId)).acked.onFailure { case t =>
+            logger.trace(s"$who is down")
+            self ! WorkFailed(who, ongoing.workId)
+          }
         }
         who -> toPing
       }
       state = state.extendDeadline(toExtend)
+      firstClean = false
 
       //TODO check if any work that was made available is not on the current state
 
     case SaveSnapshotSuccess(meta) =>
-      deleteMessages(journalNumberOnSnapshot)
+      if (journalNumberOnSnapshot - 1 > 0) deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case fail @ WorkFailed(who, workId) =>
