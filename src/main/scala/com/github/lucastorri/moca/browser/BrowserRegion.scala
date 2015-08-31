@@ -44,10 +44,13 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
 
   def goTo(url: Url): Future[RenderedPage] = {
     logger.trace(s"Region $id goTo $url")
-    this.current = url
-    this.promise = Promise[RenderedPage]()
-    Platform.runLater(runnable(webEngine.load(url.toString)))
-    promise.future
+    val pagePromise = Promise[RenderedPage]()
+    Platform.runLater(runnable {
+      this.current = url
+      this.promise = pagePromise
+      webEngine.load(url.toString)
+    })
+    pagePromise.future
   }
 
   protected override def layoutChildren(): Unit =
