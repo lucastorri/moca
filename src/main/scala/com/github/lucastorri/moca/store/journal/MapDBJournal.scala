@@ -1,18 +1,13 @@
 package com.github.lucastorri.moca.store.journal
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.file._
 
-import akka.actor.{ActorRef, ExtendedActorSystem}
+import akka.actor.ActorRef
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{AtomicWrite, PersistentRepr}
-import akka.serialization.Serialization
-import com.esotericsoftware.kryo.io.{Input, Output}
-import com.esotericsoftware.kryo.{Kryo, Serializer => KryoSerializer}
 import com.github.lucastorri.moca.store.serialization.KryoSerialization
 import com.typesafe.config.Config
 import org.mapdb.DBMaker
-import org.objenesis.strategy.StdInstantiatorStrategy
 
 import scala.collection.immutable
 import scala.collection.immutable.NumericRange

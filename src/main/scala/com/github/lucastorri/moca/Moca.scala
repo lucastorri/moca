@@ -3,7 +3,7 @@ package com.github.lucastorri.moca
 import com.github.lucastorri.moca.config.{AkkaSystem, MocaConfig}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
-import com.github.lucastorri.moca.store.work.InMemWorkRepo
+import com.github.lucastorri.moca.store.work.MapDBWorkRepo
 
 object Moca extends App {
 
@@ -12,7 +12,7 @@ object Moca extends App {
   implicit val system = AkkaSystem.fromConfig(config)
 
   if (config.hasRole(Master.role)) {
-    Master.join(new InMemWorkRepo)
+    Master.join(new MapDBWorkRepo)
   }
 
   if (config.hasRole(Worker.role)) {

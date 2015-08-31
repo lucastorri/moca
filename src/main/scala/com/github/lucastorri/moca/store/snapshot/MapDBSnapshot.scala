@@ -21,7 +21,6 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
   private val db = DBMaker
     .appendFileDB(base.toFile)
     .closeOnJvmShutdown()
-    .asyncWriteEnable()
     .cacheLRUEnable()
     .fileMmapEnableIfSupported()
     .allocateIncrement(_64MB)
