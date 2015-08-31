@@ -3,13 +3,13 @@ package com.github.lucastorri.moca.store.work
 import java.nio.file.Paths
 
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.url.Url
+import com.github.lucastorri.moca.url.{Seed, Url}
 import com.typesafe.scalalogging.StrictLogging
 import org.mapdb.DBMaker
 
-import scala.concurrent.Future
 import scala.collection.JavaConversions._
-import scala.util.{Try, Random}
+import scala.concurrent.Future
+import scala.util.Try
 
 class MapDBWorkRepo extends WorkRepo with StrictLogging {
 
@@ -28,11 +28,6 @@ class MapDBWorkRepo extends WorkRepo with StrictLogging {
   private val work = db.hashMap[String, String]("work-available")
   private val open = db.hashMap[String, String]("work-in-progress")
 
-  if (work.isEmpty && open.isEmpty) {
-    logger.info("Adding fake seeds")
-    work.put(newId, "http://www.here.com/")
-    work.put(newId, "http://www.example.com/")
-  }
 
   override def available(): Future[Work] = transaction {
     work.headOption match {
@@ -59,12 +54,14 @@ class MapDBWorkRepo extends WorkRepo with StrictLogging {
     ids.foreach(release)
   }
 
+  override def addAll(seeds: Set[Seed]): Future[Unit] = transaction {
+    seeds.foreach(seed => work.put(seed.id, seed.url.toString) )
+  }
+
   private def transaction[T](f: => T): Future[T] = Future.fromTry {
     val result = Try(f)
     if (result.isSuccess) db.commit() else db.rollback()
     result
   }
-
-  private def newId = Random.alphanumeric.take(16).mkString
 
 }

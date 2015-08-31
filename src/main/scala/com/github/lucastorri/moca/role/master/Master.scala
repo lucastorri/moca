@@ -8,7 +8,7 @@ import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.master.Master.Event.{WorkDone, WorkFailed, WorkStarted, WorkerTerminated}
-import com.github.lucastorri.moca.role.master.Master.{CleanUp, Event, Reply}
+import com.github.lucastorri.moca.role.master.Master.{ConsistencyCheck, CleanUp, Event, Reply}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -27,6 +27,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def preStart(): Unit = {
     logger.info("Master started")
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
+    system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, ConsistencyCheck)
   }
 
   override def receiveRecover: Receive = {
@@ -94,6 +95,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       state = state.extendDeadline(toExtend)
       firstClean = false
 
+    case ConsistencyCheck =>
       //TODO check if any work that was made available is not on the current state
 
     case SaveSnapshotSuccess(meta) =>
@@ -119,6 +121,9 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       state = state.done(who, workId)
       works.done(workId) //TODO handle //TODO save links
 
+    case AddSeeds(seeds) =>
+      works.addAll(seeds)
+
   }
     
   override val persistenceId: String = s"${Master.name}-persistence"
@@ -133,6 +138,7 @@ object Master {
   val name = "master"
 
   val pingInterval = 5.minutes
+  val consistencyCheckInterval = 30.minutes
 
   def proxy()(implicit system: ActorSystem): ActorRef = {
     val path = s"/user/$name"
@@ -155,6 +161,7 @@ object Master {
   }
 
   case object CleanUp
+  case object ConsistencyCheck
   case class Reply(who: ActorRef, offer: WorkOffer)
 
 }
