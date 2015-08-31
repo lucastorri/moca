@@ -1,6 +1,7 @@
 package com.github.lucastorri.moca.role.worker
 
 import akka.actor._
+import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
 import akka.pattern.ask
 import akka.util.{Timeout => AskTimeout}
 import com.github.lucastorri.moca.async.retry
@@ -19,22 +20,24 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 10.seconds
-  
-  val requestWorkInterval = 5.minute
-  val master = Master.proxy()
-  val repo: ContentRepo = new InMemContentRepo
-  var currentWork: Work = _
+
+  private val mediator = DistributedPubSub(context.system).mediator
+  private val requestWorkInterval = 5.minute
+  private val master = Master.proxy()
+  private val repo: ContentRepo = new InMemContentRepo
+  private var currentWork: Work = _
 
   override def preStart(): Unit = {
     logger.info("worker started")
     self ! RequestWork
+    mediator ! DistributedPubSubMediator.Subscribe(WorkAvailable.topic, self)
   }
 
   startWith(State.Idle, Option.empty)
 
   when(State.Idle, stateTimeout = requestWorkInterval) {
 
-    case Event(StateTimeout | RequestWork, _) =>
+    case Event(StateTimeout | RequestWork | WorkAvailable, _) =>
       master ! WorkRequest
       stay()
 
@@ -68,7 +71,7 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
       goto(State.Idle) using None
 
   }
-  
+
   onTransition {
 
     case State.Idle -> State.Working =>
@@ -78,6 +81,11 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
       logger.info(s"Work done $stateData")
       self ! RequestWork
 
+  }
+
+  override def unhandled(message: Any): Unit = message match {
+    case _: DistributedPubSubMediator.SubscribeAck => logger.trace("Subscribed for new work")
+    case _ => logger.error(s"Unknown message $message")
   }
 
 }

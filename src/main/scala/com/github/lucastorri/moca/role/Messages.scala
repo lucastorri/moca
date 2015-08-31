@@ -14,6 +14,7 @@ object Messages {
   case class InProgress(workId: String)
 
   case class AddSeeds(seeds: Set[Work])
+  case object WorkAvailable { val topic = "work-announcement" }
 
   implicit class Acked(future: Future[Any]) {
 

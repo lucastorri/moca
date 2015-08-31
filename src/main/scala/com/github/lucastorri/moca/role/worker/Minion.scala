@@ -116,7 +116,11 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
     deleteMessages(lastSequenceNr)
     parent ! Done(work)
   }
-  
+
+  override def unhandled(message: Any): Unit = message match {
+    case _ => logger.error(s"Unknown message $message")
+  }
+
   override val persistenceId: String = s"minion-${work.id}"
   override def journalPluginId: String = system.settings.config.getString("moca.minion.journal-plugin-id")
 

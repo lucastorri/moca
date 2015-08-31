@@ -1,6 +1,7 @@
 package com.github.lucastorri.moca.role.master
 
 import akka.actor._
+import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.pattern.ask
 import akka.persistence._
@@ -23,6 +24,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   private var state = State.initial()
   private var journalNumberOnSnapshot = 0L
   private var firstClean = true
+  private val mediator = DistributedPubSub(context.system).mediator
 
   override def preStart(): Unit = {
     logger.info("Master started")
@@ -126,9 +128,14 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       val client = sender()
       works.addAll(seeds).onSuccess { case _ =>
         client ! Ack
-        //TODO if there are no workers running, broadcast announcing that new seeds are available
+        mediator !  DistributedPubSubMediator.Publish(WorkAvailable.topic, WorkAvailable)
       }
 
+  }
+
+  override def unhandled(message: Any): Unit = message match {
+    case _: DeleteSnapshotsSuccess =>
+    case _ => logger.error(s"Unknown message $message")
   }
     
   override val persistenceId: String = s"${Master.name}-persistence"
