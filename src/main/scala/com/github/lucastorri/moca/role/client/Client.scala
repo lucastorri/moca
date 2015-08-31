@@ -3,7 +3,7 @@ package com.github.lucastorri.moca.role.client
 import java.io.File
 import java.security.MessageDigest
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
@@ -15,7 +15,7 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -29,6 +29,7 @@ class Client extends Actor with StrictLogging {
   override def receive: Receive = {
 
     case add @ AddSeedFile(file) => add.reply {
+      logger.info(s"Adding seeds from $file")
       val batch = AddBatch(file)
       self ! batch
       batch.promise.future
@@ -36,7 +37,7 @@ class Client extends Actor with StrictLogging {
 
     case batch: AddBatch =>
       if (batch.isEmpty) {
-        logger.info(s"Finished adding ${batch.file}")
+        logger.info(s"Successfully added seeds from ${batch.file}")
         batch.promise.success(())
       } else {
         val next = batch.next.map(url => Work(id(url), Url(url)))
@@ -86,12 +87,19 @@ class Client extends Actor with StrictLogging {
 }
 
 object Client {
-
+  
   val role = "client"
 
-  def start(implicit system: ActorSystem): ActorRef =
-    system.actorOf(Props[Client])
-
+  def run(commands: Set[Command])(implicit system: ActorSystem, exec: ExecutionContext): Future[Set[(Command, Boolean)]] = {
+    val client = system.actorOf(Props[Client])
+    Future.sequence {
+      commands.map { cmd =>
+        client ! cmd
+        cmd.result.map(r => cmd -> true).recover { case e => cmd -> false }
+      }
+    }
+  }
+  
   sealed trait Command {
 
     private[Client] val promise = Promise[Unit]()

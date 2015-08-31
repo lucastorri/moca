@@ -7,16 +7,14 @@ import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.work.MapDBWorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.concurrent.Future
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
 
 object Moca extends App with StrictLogging {
 
   logger.info("Moca starting")
-
   val config = MocaConfig.parse(args)
-  
   implicit val system = AkkaSystem.fromConfig(config)
+  implicit val exec = system.dispatcher
 
   if (config.hasRole(Master.role)) {
     Master.standBy(new MapDBWorkRepo)
@@ -27,21 +25,13 @@ object Moca extends App with StrictLogging {
   }
   
   if (config.hasRole(Client.role)) {
-    val commands = Future.sequence {
-      val client = Client.start
-      config.clientCommands.map { cmd =>
-        client ! cmd
-        cmd.result.map(r => cmd -> true).recover { case e => cmd -> false }
-      }
-    }
-    commands.onComplete {
+    Client.run(config.clientCommands).onComplete {
       case Success(results) =>
-        results.foreach {
-          case (cmd, true) => logger.info(s"Command $cmd successful")
-          case (cmd, false) => logger.info(s"Command $cmd failed")
-        }
+        results.foreach { case (cmd, r) => logger.info(s"Command $cmd ${if (r) "successful" else "failed"}") }
+        system.terminate()
       case Failure(t) =>
         logger.error("Failed to run commands", t)
+        System.exit(1)
     }
   }
 

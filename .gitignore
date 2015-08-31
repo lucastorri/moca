@@ -1,6 +1,9 @@
 /.idea
 /project/target
 /target
+
+#run files
 /journals
 /snapshots
 /works
+/seeds.txt

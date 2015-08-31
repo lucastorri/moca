@@ -86,7 +86,7 @@ object Worker {
 
   val role = "worker"
 
-  def start(id: Int)(implicit system: ActorSystem): ActorRef = {
+  def start(id: Int)(implicit system: ActorSystem): Unit = {
     system.actorOf(Props[Worker], s"worker-$id")
   }
 

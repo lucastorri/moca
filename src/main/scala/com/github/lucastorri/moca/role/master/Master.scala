@@ -122,7 +122,12 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       works.done(workId) //TODO handle //TODO save links
 
     case AddSeeds(seeds) =>
-      works.addAll(seeds)
+      logger.trace("Adding new seeds")
+      val client = sender()
+      works.addAll(seeds).onSuccess { case _ =>
+        client ! Ack
+        //TODO if there are no workers running, broadcast announcing that new seeds are available
+      }
 
   }
     
@@ -146,7 +151,7 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(work: WorkRepo)(implicit system: ActorSystem): ActorRef = {
+  def standBy(work: WorkRepo)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
     val manager = ClusterSingletonManager.props(Props(new Master(work)), PoisonPill, settings)
     system.actorOf(manager, name)
