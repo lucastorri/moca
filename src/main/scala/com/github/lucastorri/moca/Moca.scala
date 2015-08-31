@@ -5,8 +5,14 @@ import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.work.MapDBWorkRepo
+import com.typesafe.scalalogging.StrictLogging
 
-object Moca extends App {
+import scala.concurrent.Future
+import scala.util.{Success, Failure}
+
+object Moca extends App with StrictLogging {
+
+  logger.info("Moca starting")
 
   val config = MocaConfig.parse(args)
   
@@ -21,11 +27,26 @@ object Moca extends App {
   }
   
   if (config.hasRole(Client.role)) {
-    val client = Client.start
-    config.clientCommands.foreach(client ! _)
+    val commands = Future.sequence {
+      val client = Client.start
+      config.clientCommands.map { cmd =>
+        client ! cmd
+        cmd.result.map(r => cmd -> true).recover { case e => cmd -> false }
+      }
+    }
+    commands.onComplete {
+      case Success(results) =>
+        results.foreach {
+          case (cmd, true) => logger.info(s"Command $cmd successful")
+          case (cmd, false) => logger.info(s"Command $cmd failed")
+        }
+      case Failure(t) =>
+        logger.error("Failed to run commands", t)
+    }
   }
 
   sys.addShutdownHook {
+    logger.info("Moca going down")
     system.terminate()
   }
 
