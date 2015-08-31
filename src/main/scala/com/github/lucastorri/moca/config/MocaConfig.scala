@@ -39,12 +39,17 @@ object MocaConfig {
       .text("name of system for all members in cluster")
       .action { (n, c) => c.copy(systemName = n) }
 
-    opt[String]('S', "seed")
+    opt[String]('S', "cluster-seeds")
       .unbounded()
       .valueName("host:port")
       .text("jars to include")
       .validate(s => if (s.matches(".*:\\d+")) success else failure(s"invalid format $s"))
       .action { (s, c) => c.copy(seeds = c.seeds + s) }
+
+    opt[File]('s', "seeds")
+      .text("url seeds file to be added")
+      .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
+      .action { (f, c) => /*TODO*/ ??? }
 
     opt[Int]('p', "port")
       .text("main system port")
