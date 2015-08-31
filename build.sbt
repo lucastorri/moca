@@ -15,4 +15,5 @@ libraryDependencies ++= Seq(
   "org.jsoup" % "jsoup" % "1.8.3",
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
-  "com.github.scopt" %% "scopt" % "3.3.0")
+  "com.github.scopt" %% "scopt" % "3.3.0",
+  "org.mapdb" % "mapdb" % "2.0-beta6")
