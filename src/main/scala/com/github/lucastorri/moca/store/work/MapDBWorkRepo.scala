@@ -3,7 +3,7 @@ package com.github.lucastorri.moca.store.work
 import java.nio.file.Paths
 
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.url.{Seed, Url}
+import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import org.mapdb.DBMaker
 
@@ -54,8 +54,8 @@ class MapDBWorkRepo extends WorkRepo with StrictLogging {
     ids.foreach(release)
   }
 
-  override def addAll(seeds: Set[Seed]): Future[Unit] = transaction {
-    seeds.foreach(seed => work.put(seed.id, seed.url.toString) )
+  override def addAll(seeds: Set[Work]): Future[Unit] = transaction {
+    seeds.foreach(w => work.put(w.id, w.seed.toString))
   }
 
   private def transaction[T](f: => T): Future[T] = Future.fromTry {

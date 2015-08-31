@@ -4,7 +4,6 @@ import java.util.concurrent.atomic.AtomicLong
 
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{AtomicWrite, PersistentRepr}
-import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.{immutable, mutable}
 import scala.concurrent.ExecutionContext.Implicits.global

@@ -3,14 +3,15 @@ package com.github.lucastorri.moca.role.client
 import java.io.File
 import java.security.MessageDigest
 
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
+import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.client.Client.Command.AddSeedFile
 import com.github.lucastorri.moca.role.master.Master
-import com.github.lucastorri.moca.url.{Seed, Url}
+import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
@@ -38,7 +39,7 @@ class Client extends Actor with StrictLogging {
         logger.info(s"Finished adding ${batch.file}")
         batch.promise.success(())
       } else {
-        val next = batch.next.map(url => Seed(id(url), Url(url)))
+        val next = batch.next.map(url => Work(id(url), Url(url)))
         retry(3)(master ? AddSeeds(next)).acked.onComplete {
           case Success(_) =>
             logger.info(s"Added ${batch.processed}/${batch.total} of ${batch.file}")
@@ -86,22 +87,27 @@ class Client extends Actor with StrictLogging {
 
 object Client {
 
-  sealed trait Command[T] {
+  val role = "client"
 
-    private[Client] val promise = Promise[T]()
+  def start(implicit system: ActorSystem): ActorRef =
+    system.actorOf(Props[Client])
 
-    private[Client] def reply(f: => Future[T]): Unit =
+  sealed trait Command {
+
+    private[Client] val promise = Promise[Unit]()
+
+    private[Client] def reply(f: => Future[Unit]): Unit =
       Try(f) match {
         case Success(r) => promise.completeWith(r)
         case Failure(t) => promise.failure(t)
       }
 
-    def result: Future[T] = promise.future
+    def result: Future[Unit] = promise.future
 
   }
 
   object Command {
-    case class AddSeedFile(file: File) extends Command[Unit]
+    case class AddSeedFile(file: File) extends Command
   }
 
 }

@@ -1,11 +1,10 @@
 package com.github.lucastorri.moca.store.work
 
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.url.{Seed, Url}
+import com.github.lucastorri.moca.url.Url
 
 import scala.collection.mutable
 import scala.concurrent.Future
-import scala.util.Random
 
 class InMemWorkRepo extends WorkRepo {
 
@@ -39,8 +38,8 @@ class InMemWorkRepo extends WorkRepo {
     Future.successful(())
   }
 
-  override def addAll(seeds: Set[Seed]): Future[Unit] = {
-    seeds.foreach { case seed => work(seed.id) = seed.url.toString }
+  override def addAll(seeds: Set[Work]): Future[Unit] = {
+    seeds.foreach(w => work(w.id) = w.seed.toString)
     Future.successful(())
   }
 

@@ -8,7 +8,7 @@ import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.master.Master.Event.{WorkDone, WorkFailed, WorkStarted, WorkerTerminated}
-import com.github.lucastorri.moca.role.master.Master.{ConsistencyCheck, CleanUp, Event, Reply}
+import com.github.lucastorri.moca.role.master.Master.{CleanUp, ConsistencyCheck, Event, Reply}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -146,7 +146,7 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def join(work: WorkRepo)(implicit system: ActorSystem): ActorRef = {
+  def standBy(work: WorkRepo)(implicit system: ActorSystem): ActorRef = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
     val manager = ClusterSingletonManager.props(Props(new Master(work)), PoisonPill, settings)
     system.actorOf(manager, name)

@@ -1,7 +1,6 @@
 package com.github.lucastorri.moca.role
 
-import com.github.lucastorri.moca.store.content.{WorkContentTransfer, ContentLink}
-import com.github.lucastorri.moca.url.Seed
+import com.github.lucastorri.moca.store.content.WorkContentTransfer
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -14,7 +13,7 @@ object Messages {
   case class WorkFinished(workId: String, transfer: WorkContentTransfer)
   case class InProgress(workId: String)
 
-  case class AddSeeds(seeds: Set[Seed])
+  case class AddSeeds(seeds: Set[Work])
 
   implicit class Acked(future: Future[Any]) {
 

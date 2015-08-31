@@ -1,7 +1,6 @@
 package com.github.lucastorri.moca.store.work
 
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.url.Seed
 
 import scala.concurrent.Future
 
@@ -15,7 +14,7 @@ trait WorkRepo {
 
   def releaseAll(workIds: Set[String]): Future[Unit]
 
-  def addAll(seeds: Set[Seed]): Future[Unit]
+  def addAll(seeds: Set[Work]): Future[Unit]
 
 }
 

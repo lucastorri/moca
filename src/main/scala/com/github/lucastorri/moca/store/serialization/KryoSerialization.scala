@@ -2,8 +2,7 @@ package com.github.lucastorri.moca.store.serialization
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
-import akka.actor.{ActorSystem, ExtendedActorSystem, ActorRef}
-import akka.persistence.PersistentRepr
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
 import com.esotericsoftware.kryo.io.{Input, Output}
 import com.esotericsoftware.kryo.{Kryo, Serializer => KryoSerializer}
 import org.objenesis.strategy.StdInstantiatorStrategy

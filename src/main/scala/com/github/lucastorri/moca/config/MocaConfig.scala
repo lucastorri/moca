@@ -2,18 +2,24 @@ package com.github.lucastorri.moca.config
 
 import java.io.File
 
+import com.github.lucastorri.moca.role.client.Client
+import com.github.lucastorri.moca.role.client.Client.Command.AddSeedFile
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 
 case class MocaConfig(
   systemName: String = "MocaSystem",
   seeds: Set[String] = Set.empty,
-  roles: Set[String] = MocaConfig.availableRoles,
   port: Int = 1731,
   hostname: String = "",
   workers: Int = 10,
-  extraConfig: Option[File] = Option.empty
+  clientCommands: Set[Client.Command] = Set.empty,
+  extraConfig: Option[File] = Option.empty,
+  private var _roles: Set[String] = Set(Master.role, Worker.role)
 ) {
+
+  val roles: Set[String] =
+    if (clientCommands.nonEmpty) Set(Client.role) else _roles
 
   def isNotSingleInstance: Boolean =
     seeds.nonEmpty
@@ -28,8 +34,6 @@ object MocaConfig {
   //TODO use generator
   val v = "0.0.1"
   val name = "moca"
-
-  val availableRoles = Set(Master.role, Worker.role)
 
   private val parser = new scopt.OptionParser[MocaConfig](name) {
 
@@ -49,7 +53,7 @@ object MocaConfig {
     opt[File]('s', "seeds")
       .text("url seeds file to be added")
       .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
-      .action { (f, c) => /*TODO*/ ??? }
+      .action { (f, c) => c.copy(clientCommands = c.clientCommands + AddSeedFile(f)) }
 
     opt[Int]('p', "port")
       .text("main system port")
@@ -58,15 +62,6 @@ object MocaConfig {
     opt[String]('h', "hostname")
       .text("main system hostname")
       .action { (h, c) => c.copy(hostname = h) }
-
-    opt[Seq[String]]('R', "roles")
-      .text("roles of this instance")
-      .validate(_.find(r => !availableRoles.contains(r)).map(r => failure(s"unknown role $r")).getOrElse(success))
-      .action { (r, c) => c.copy(roles = r.toSet) }
-
-    opt[Unit]("print-roles")
-      .text("list roles available and exit")
-      .action { (_, c) => println(availableRoles); sys.exit(0) }
 
     opt[Int]('w', "workers")
       .text("number of workers to be spawned")

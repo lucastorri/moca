@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.store.serialization
 
-import akka.actor.{ExtendedActorSystem, ActorRef}
+import akka.actor.{ActorRef, ExtendedActorSystem}
 import akka.serialization.Serialization
 import com.esotericsoftware.kryo.io.{Input, Output}
 import com.esotericsoftware.kryo.{Kryo, Serializer => KryoSerializer}
