@@ -10,7 +10,7 @@ trait ContentRepo {
 
   def apply(work: Work): WorkContentRepo
 
-  def links(work: Work): Future[Set[ContentLink]]
+  def links(work: Work): WorkContentTransfer
 
 }
 

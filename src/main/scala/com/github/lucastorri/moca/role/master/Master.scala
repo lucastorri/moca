@@ -111,12 +111,12 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       state = state.start(who, workId)
       watch(who)
 
-    case WorkFinished(workId, links) =>
+    case WorkFinished(workId, transfer) =>
       logger.info(s"Work done $workId")
       val who = sender()
+      who ! Ack
       persist(WorkDone(who, workId))(noop)
       state = state.done(who, workId)
-      who ! Ack
       works.done(workId) //TODO handle //TODO save links
 
   }

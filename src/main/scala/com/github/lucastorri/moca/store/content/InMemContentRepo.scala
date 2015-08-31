@@ -14,8 +14,8 @@ class InMemContentRepo extends ContentRepo {
   override def apply(work: Work): WorkContentRepo =
     get(work)
 
-  override def links(work: Work): Future[Set[ContentLink]] =
-    Future.successful(get(work).links.toSet)
+  override def links(work: Work): WorkContentTransfer =
+    InMemWorkContentTransfer(get(work).links.toStream)
 
   private def get(work: Work): InMemWorkContentRepo =
     open.getOrElseUpdate(work, new InMemWorkContentRepo)
@@ -32,3 +32,5 @@ class InMemWorkContentRepo extends WorkContentRepo {
   }
 
 }
+
+case class InMemWorkContentTransfer(contents: Stream[ContentLink]) extends WorkContentTransfer

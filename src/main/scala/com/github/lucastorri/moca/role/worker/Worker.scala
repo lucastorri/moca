@@ -54,12 +54,8 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
     case Event(Done(work), _) =>
       sender() ! PoisonPill
-      def update =
-        for {
-          links <- repo.links(work)
-          ack <- master ? WorkFinished(work.id, links)
-        } yield ack
-      retry(3)(update).acked().onComplete {
+      val transfer = repo.links(work)
+      retry(3)(master ? WorkFinished(work.id, transfer)).acked().onComplete {
         case Success(_) =>
           self ! Finished
         case Failure(t) =>
