@@ -12,8 +12,11 @@ case class State(ongoingWork: Map[ActorRef, Set[OngoingWork]]) {
   }
 
   def cancel(who: ActorRef, workId: String): State = {
-    val entry = who -> (get(who) - create(workId))
-    copy(ongoingWork = ongoingWork + entry)
+    val workSet = get(who) - create(workId)
+    val ongoing =
+      if (workSet.isEmpty) ongoingWork - who
+      else ongoingWork + (who -> workSet)
+    copy(ongoingWork = ongoing)
   }
 
   def cancel(who: ActorRef): State =
