@@ -97,6 +97,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case fail @ WorkFailed(who, workId) =>
+      logger.info(s"Work $workId failed")
       persist(fail)(noop)
       state = state.cancel(who, workId)
       works.release(workId)

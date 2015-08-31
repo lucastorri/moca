@@ -4,13 +4,14 @@ import java.nio.file.Paths
 
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.url.Url
+import com.typesafe.scalalogging.StrictLogging
 import org.mapdb.DBMaker
 
 import scala.concurrent.Future
 import scala.collection.JavaConversions._
-import scala.util.Random
+import scala.util.{Try, Random}
 
-class MapDBWorkRepo extends WorkRepo {
+class MapDBWorkRepo extends WorkRepo with StrictLogging {
 
   //TODO make configurable
   private val path = Paths.get("works")
@@ -24,39 +25,44 @@ class MapDBWorkRepo extends WorkRepo {
     .allocateIncrement(_1MB)
     .make()
 
-  private val work = db.hashSet[String]("work-available")
+  private val work = db.hashMap[String, String]("work-available")
   private val open = db.hashMap[String, String]("work-in-progress")
 
-  if (work.isEmpty) {
-    work.add("http://www.here.com/")
-    work.add("http://www.example.com/")
+  if (work.isEmpty && open.isEmpty) {
+    logger.info("Adding fake seeds")
+    work.put(newId, "http://www.here.com/")
+    work.put(newId, "http://www.example.com/")
   }
 
-  override def available(): Future[Work] = {
+  override def available(): Future[Work] = transaction {
     work.headOption match {
-      case Some(seed) =>
-        val id = Random.alphanumeric.take(16).mkString
-        work.remove(seed)
+      case Some((id, seed)) =>
+        work.remove(id)
         open.put(id, seed)
-        Future.successful(Work(id, Url(seed)))
+        Work(id, Url(seed))
       case None =>
-        Future.failed(NoWorkLeftException)
+        throw NoWorkLeftException
     }
   }
 
-  override def done(workId: String): Future[Unit] = {
+  override def done(workId: String): Future[Unit] = transaction {
     open.remove(workId)
-    Future.successful(())
   }
 
-  override def release(workId: String): Future[Unit] = {
-    Option(open.remove(workId)).foreach(work.add)
-    Future.successful(())
+  override def release(workId: String): Future[Unit] = transaction {
+    Option(open.remove(workId)).foreach(seed => work.put(workId, seed))
   }
 
-  override def releaseAll(ids: Set[String]): Future[Unit] = {
+  override def releaseAll(ids: Set[String]): Future[Unit] = transaction {
     ids.foreach(release)
-    Future.successful(())
   }
+
+  private def transaction[T](f: => T): Future[T] = Future.fromTry{
+    val result = Try(f)
+    if (result.isSuccess) db.commit() else db.rollback()
+    result
+  }
+
+  private def newId = Random.alphanumeric.take(16).mkString
 
 }
