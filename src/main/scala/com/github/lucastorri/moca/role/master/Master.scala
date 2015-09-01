@@ -119,10 +119,14 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     case WorkFinished(workId, transfer) =>
       logger.info(s"Work done $workId")
       val who = sender()
-      who ! Ack
+      works.done(workId, transfer).onSuccess { case _ =>
+        who ! Ack
+        self ! Done(workId, who)
+      }
+
+    case Done(workId, who) =>
       persist(WorkDone(who, workId))(noop)
       state = state.done(who, workId)
-      works.done(workId) //TODO handle //TODO save links
 
     case AddSeeds(seeds) =>
       logger.trace("Adding new seeds")
@@ -145,6 +149,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
   case object CleanUp
   case class Reply(who: ActorRef, offer: WorkOffer)
+  case class Done(workId: String, who: ActorRef)
 
 }
 

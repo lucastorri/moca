@@ -1,8 +1,10 @@
 package com.github.lucastorri.moca.store.work
 
 import java.nio.file.Paths
+import java.util
 
 import com.github.lucastorri.moca.role.Work
+import com.github.lucastorri.moca.store.content.{ContentLink, WorkContentTransfer}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -27,6 +29,7 @@ class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
 
   private val work = db.hashMap[String, String]("available")
   private val open = db.hashMap[String, String]("in-progress")
+  private val done = db.hashMap[String, java.util.HashSet[ContentLink]]("finished")
 
 
   override def available(): Future[Work] = transaction {
@@ -40,9 +43,10 @@ class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
     }
   }
 
-  override def done(workId: String): Future[Unit] = transaction {
+  override def done(workId: String, transfer: WorkContentTransfer): Future[Unit] = transaction {
     logger.trace(s"done $workId")
     open.remove(workId)
+    done.put(workId, new util.HashSet[ContentLink](transfer.contents))
   }
 
   override def release(workId: String): Future[Unit] = transaction {
