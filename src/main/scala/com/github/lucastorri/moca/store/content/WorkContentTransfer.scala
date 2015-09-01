@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.store.content
 
-trait WorkContentTransfer {
+trait WorkContentTransfer extends Serializable {
 
   def contents: Stream[ContentLink]
 
