@@ -17,7 +17,7 @@ class FSContentRepo(config: Config) extends ContentRepo {
   base.toFile.mkdirs()
 
   override def apply(work: Work): WorkContentRepo =
-    repo(work)
+    repo(work).addSeed(work.seed)
 
   override def links(work: Work): WorkContentTransfer =
     FileWorkContentTransfer(repo(work).log.toString)
@@ -31,6 +31,12 @@ case class FSWorkContentRepo(directory: Path) extends WorkContentRepo {
 
   directory.toFile.mkdirs()
   val log = directory.resolve("__log")
+  lazy val seeds = directory.resolve("__seeds")
+
+  def addSeed(seed: Url): WorkContentRepo = {
+    Files.write(seeds, s"$seed\n".getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+    this
+  }
 
   override def save(url: Url, content: Content): Future[Unit] = {
     val file = directory.resolve(url.id)
