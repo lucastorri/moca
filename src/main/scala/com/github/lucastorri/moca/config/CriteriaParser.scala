@@ -11,7 +11,9 @@ object CriteriaParser {
     "a-href" -> { (_, _) => AHrefCriteria },
     "js" -> { (params, _) => StringJSCriteria(params.head) },
     "max-depth" -> { (params, current) => MaxDepthCriteria(current, params.head.toInt) },
-    "filter" -> { (params, current) => FilteredCriteria(current, filter(params.head)) }
+    "filter" -> { (params, current) => FilteredCriteria(current, filter(params.head)) },
+    "same-host" -> { (_, current) => SameHostCriteria(current) },
+    "same-domain" -> { (_, current) => SameDomainCriteria(current) }
   )
 
   private[CriteriaParser] def filter(className: String): FilteredCriteria.Filter =
