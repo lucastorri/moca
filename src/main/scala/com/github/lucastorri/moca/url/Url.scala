@@ -48,6 +48,9 @@ class Url private[Url](override val toString: String) extends Serializable {
     case _ => false
   }
 
+  def toURL: URL =
+    _uri.toURL
+
 }
 
 object Url {

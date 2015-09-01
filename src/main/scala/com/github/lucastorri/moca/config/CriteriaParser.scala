@@ -13,7 +13,8 @@ object CriteriaParser {
     "max-depth" -> { (params, current) => MaxDepthCriteria(current, params.head.toInt) },
     "filter" -> { (params, current) => FilteredCriteria(current, filter(params.head)) },
     "same-host" -> { (_, current) => SameHostCriteria(current) },
-    "same-domain" -> { (_, current) => SameDomainCriteria(current) }
+    "same-domain" -> { (_, current) => SameDomainCriteria(current) },
+    "robots-txt" -> { (_, current) => RobotsTxtCriteria(current) }
   )
 
   private[CriteriaParser] def filter(className: String): FilteredCriteria.Filter =
