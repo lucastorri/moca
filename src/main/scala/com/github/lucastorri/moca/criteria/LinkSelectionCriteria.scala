@@ -6,6 +6,8 @@ import com.github.lucastorri.moca.role.worker.OutLink
 import com.github.lucastorri.moca.url.Url
 
 //TODO create a criteria with support for robots.txt
+//TODO create a criteria based on number of urls downloaded and queued (using minion's data structures)
+//TODO create a same host/domain criteria
 
 trait LinkSelectionCriteria {
 
