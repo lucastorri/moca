@@ -1,6 +1,6 @@
 name := "moca"
 
-version := "0.1"
+version := "0.0.1"
 
 scalaVersion := "2.11.7"
 
@@ -25,3 +25,10 @@ assemblyOption in assembly := (assemblyOption in assembly).value
   .copy(prependShellScript = Some(Seq("#!/usr/bin/env sh", "exec java -jar \"$0\" \"$@\"")))
 
 assemblyJarName in assembly := s"${name.value}-${version.value}"
+
+lazy val root = (project in file("."))
+  .enablePlugins(BuildInfoPlugin)
+  .settings(
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoPackage := "com.github.lucastorri.moca.config")
+

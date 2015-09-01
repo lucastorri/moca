@@ -37,7 +37,7 @@ object MocaConfig {
 
   private val parser = new scopt.OptionParser[MocaConfig](name) {
 
-    head(name, v)
+    head(BuildInfo.name, BuildInfo.version)
 
     opt[String]('n', "name")
       .text("name of system for all members in cluster")
@@ -71,6 +71,9 @@ object MocaConfig {
       .text("extra conf file")
       .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
       .action { (f, c) => c.copy(extraConfig = Some(f)) }
+
+    help("help")
+      .text("prints this usage text")
 
   }
 

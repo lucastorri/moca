@@ -11,10 +11,11 @@ import scala.util.{Failure, Success}
 
 object Moca extends App with StrictLogging {
 
-  logger.info("Moca starting")
   val config = MocaConfig.parse(args)
   implicit val system = AkkaSystem.fromConfig(config)
   implicit val exec = system.dispatcher
+
+  logger.info("Moca starting")
 
   if (config.hasRole(Master.role)) {
     Master.standBy(new MapDBWorkRepo)
