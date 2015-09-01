@@ -9,8 +9,9 @@ import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency}
+import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
+import com.github.lucastorri.moca.store.content.WorkContentTransfer
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -36,7 +37,13 @@ class Client extends Actor with StrictLogging {
     }
 
     case check @ CheckWorkRepoConsistency() => check.reply {
-      (master ? ConsistencyCheck).map(_ => ())
+      logger.info("Sending check request")
+      (master ? ConsistencyCheck).acked.map(_ => ())
+    }
+
+    case get @ GetSeedResults(workId) => get.reply {
+      logger.info(s"Requesting results for $workId")
+      (master ? GetLinks(workId)).mapTo[WorkLinks].map(_.transfer.get)
     }
 
     case batch: AddBatch =>
@@ -55,6 +62,10 @@ class Client extends Actor with StrictLogging {
         }
       }
 
+  }
+
+  override def unhandled(message: Any): Unit = {
+    logger.error(s"Unhandled message $message")
   }
 
   case class AddBatch(file: File) {
@@ -94,33 +105,45 @@ object Client {
   
   val role = "client"
 
-  def run(commands: Set[Command])(implicit system: ActorSystem, exec: ExecutionContext): Future[Set[(Command, Boolean)]] = {
+  def run(commands: Set[Command[_]])(implicit system: ActorSystem, exec: ExecutionContext): Future[Set[CommandResult[_]]] = {
     val client = system.actorOf(Props[Client])
     Future.sequence {
       commands.map { cmd =>
         client ! cmd
-        cmd.result.map(r => cmd -> true).recover { case e => cmd -> false }
+        cmd.result
       }
     }
   }
   
-  sealed trait Command {
+  sealed abstract class Command[T](convert: T => String) {
 
-    private[Client] val promise = Promise[Unit]()
+    private[this] val promise = Promise[CommandResult[T]]()
 
-    private[Client] def reply(f: => Future[Unit]): Unit =
+    private[Client] def reply(f: => Future[T])(implicit exec: ExecutionContext): Unit = {
       Try(f) match {
-        case Success(r) => promise.completeWith(r)
+        case Success(s) => s.onComplete { case r => promise.success(CommandResult(this, r)(convert)) }
         case Failure(t) => promise.failure(t)
       }
+    }
 
-    def result: Future[Unit] = promise.future
+    def result: Future[CommandResult[T]] = promise.future
 
   }
 
   object Command {
-    case class AddSeedFile(file: File) extends Command
-    case class CheckWorkRepoConsistency() extends Command
+    case class AddSeedFile(file: File) extends Command[Unit](_ => "success")
+    case class CheckWorkRepoConsistency() extends Command[Unit](_ => "success")
+    case class GetSeedResults(seedId: String) extends Command[WorkContentTransfer](_.contents.mkString("\n"))
+  }
+
+  case class CommandResult[T](cmd: Command[T], result: Try[T])(str: T => String) {
+
+    private def repr: String = result match {
+      case Success(r) => str(r)
+      case Failure(t) => s"${t.getClass.getName}(${t.getMessage})"
+    }
+
+    override def toString: String = s"$cmd: $repr"
   }
 
 }

@@ -7,6 +7,7 @@ import scala.concurrent.{ExecutionContext, Future}
 object Messages {
 
   case object Ack
+  case object Nack
 
   case object WorkRequest
   case class WorkOffer(work: Work)
@@ -17,6 +18,9 @@ object Messages {
   case object WorkAvailable { val topic = "work-announcement" }
 
   case object ConsistencyCheck
+
+  case class GetLinks(workId: String)
+  case class WorkLinks(workId: String, transfer: Option[WorkContentTransfer])
 
   implicit class Acked(future: Future[Any]) {
 

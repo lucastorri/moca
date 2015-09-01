@@ -29,7 +29,6 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def preStart(): Unit = {
     logger.info("Master started")
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
-    system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, ConsistencyCheck)
   }
 
   override def receiveRecover: Receive = {
@@ -60,7 +59,13 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
     case WorkRequest =>
       val who = sender()
-      works.available().foreach { work => self ! Reply(who, WorkOffer(work)) }
+      works.available().onComplete {
+        case Success(Some(work)) =>
+          self ! Reply(who, WorkOffer(work))
+        case Success(None) =>
+        case Failure(t) =>
+          logger.error("Could not load next work available", t)
+      }
 
     case Reply(who, offer) =>
       persist(WorkStarted(who, offer.work.id)) { ws =>
@@ -77,6 +82,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       logger.info(s"Worker down: $who")
       persist(WorkerTerminated(who))(noop)
       works.releaseAll(state.get(who).map(_.workId))
+        .onFailure { case t => logger.error("Could not release all work", t) }
       state = state.cancel(who)
 
     case CleanUp =>
@@ -97,10 +103,6 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       state = state.extendDeadline(toExtend)
       firstClean = false
 
-    case ConsistencyCheck =>
-      //TODO check if any work that was made available is not on the current state
-      sender() ! Ack
-
     case SaveSnapshotSuccess(meta) =>
       if (journalNumberOnSnapshot - 1 > 0) deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
@@ -110,6 +112,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       persist(fail)(noop)
       state = state.cancel(who, workId)
       works.release(workId)
+        .onFailure { case t => logger.error(s"Could not release $workId", t) }
 
     case WorkStarted(who, workId) =>
       logger.info(s"Work started $workId")
@@ -119,21 +122,42 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     case WorkFinished(workId, transfer) =>
       logger.info(s"Work done $workId")
       val who = sender()
-      works.done(workId, transfer).onSuccess { case _ =>
-        who ! Ack
-        self ! Done(workId, who)
+      works.done(workId, transfer).onComplete {
+        case Success(_) =>
+          who ! Ack
+          self ! Done(workId, who)
+        case Failure(t) =>
+          logger.error(s"Could not mark $workId done", t)
+          who ! Nack
       }
 
     case Done(workId, who) =>
       persist(WorkDone(who, workId))(noop)
       state = state.done(who, workId)
 
+    case ConsistencyCheck =>
+      //TODO check if any work that was made available is not on the current state
+      sender() ! Ack
+
     case AddSeeds(seeds) =>
       logger.trace("Adding new seeds")
       val client = sender()
-      works.addAll(seeds).onSuccess { case _ =>
-        client ! Ack
-        mediator !  DistributedPubSubMediator.Publish(WorkAvailable.topic, WorkAvailable)
+      works.addAll(seeds).onComplete {
+        case Success(_) =>
+          client ! Ack
+          mediator !  DistributedPubSubMediator.Publish(WorkAvailable.topic, WorkAvailable)
+        case Failure(t) =>
+          logger.error("Could not add seeds", t)
+      }
+
+    case GetLinks(workId) =>
+      val who = sender()
+      works.links(workId).onComplete {
+        case Success(transfer) =>
+          who ! WorkLinks(workId, transfer)
+        case Failure(t) =>
+          logger.error("Could not retrieve links", t)
+          who ! Nack
       }
 
   }

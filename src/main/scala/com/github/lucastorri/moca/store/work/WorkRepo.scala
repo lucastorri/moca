@@ -7,7 +7,7 @@ import scala.concurrent.Future
 
 trait WorkRepo {
 
-  def available(): Future[Work]
+  def available(): Future[Option[Work]]
 
   def done(workId: String, transfer: WorkContentTransfer): Future[Unit]
 
@@ -17,6 +17,6 @@ trait WorkRepo {
 
   def addAll(seeds: Set[Work]): Future[Unit]
 
-}
+  def links(workId: String): Future[Option[WorkContentTransfer]]
 
-case object NoWorkLeftException extends Exception
+}

@@ -1,12 +1,13 @@
 package com.github.lucastorri.moca.store.work
 
-import java.nio.file.Paths
-import java.util
+import java.nio.file.{Path, Paths}
 
+import akka.actor.ActorSystem
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.store.content.{ContentLink, WorkContentTransfer}
+import com.github.lucastorri.moca.store.serialization.KryoSerialization
 import com.github.lucastorri.moca.url.Url
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigMemorySize}
 import com.typesafe.scalalogging.StrictLogging
 import org.mapdb.DBMaker
 
@@ -14,10 +15,12 @@ import scala.collection.JavaConversions._
 import scala.concurrent.Future
 import scala.util.Try
 
-class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
+class MapDBWorkRepo(base: Path, increment: ConfigMemorySize, system: ActorSystem) extends KryoSerialization[ConcreteWorkTransfer](system) with WorkRepo with StrictLogging {
 
-  val base = Paths.get(config.getString("file"))
-  val increment = config.getMemorySize("allocate-increment")
+  def this(config: Config, system: ActorSystem) = this(
+    Paths.get(config.getString("file")),
+    config.getMemorySize("allocate-increment"),
+    system)
 
   private val db = DBMaker
     .appendFileDB(base.toFile)
@@ -29,24 +32,21 @@ class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
 
   private val work = db.hashMap[String, String]("available")
   private val open = db.hashMap[String, String]("in-progress")
-  private val done = db.hashMap[String, java.util.HashSet[ContentLink]]("finished")
+  private val done = db.hashMap[String, Array[Byte]]("finished")
 
 
-  override def available(): Future[Work] = transaction {
-    work.headOption match {
-      case Some((id, seed)) =>
-        work.remove(id)
-        open.put(id, seed)
-        Work(id, Url(seed))
-      case None =>
-        throw NoWorkLeftException
+  override def available(): Future[Option[Work]] = transaction {
+    work.headOption.map { case (id, seed) =>
+      work.remove(id)
+      open.put(id, seed)
+      Work(id, Url(seed))
     }
   }
 
   override def done(workId: String, transfer: WorkContentTransfer): Future[Unit] = transaction {
     logger.trace(s"done $workId")
     open.remove(workId)
-    done.put(workId, new util.HashSet[ContentLink](transfer.contents))
+    done.put(workId, serialize(ConcreteWorkTransfer(transfer)))
   }
 
   override def release(workId: String): Future[Unit] = transaction {
@@ -62,10 +62,29 @@ class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
     seeds.foreach(w => work.put(w.id, w.seed.toString))
   }
 
+  override def links(workId: String): Future[Option[WorkContentTransfer]] = transaction {
+    Option(done.get(workId)).map(deserialize)
+  }
+
   private def transaction[T](f: => T): Future[T] = Future.fromTry {
     val result = Try(f)
     if (result.isSuccess) db.commit() else db.rollback()
     result
+  }
+
+}
+
+case class ConcreteWorkTransfer(private val links: Set[ContentLink]) extends WorkContentTransfer {
+
+  override def contents: Stream[ContentLink] = links.toStream
+
+}
+
+object ConcreteWorkTransfer {
+
+  def apply(other: WorkContentTransfer): ConcreteWorkTransfer = other match {
+    case c: ConcreteWorkTransfer => c
+    case _ => ConcreteWorkTransfer(other.contents.toSet)
   }
 
 }

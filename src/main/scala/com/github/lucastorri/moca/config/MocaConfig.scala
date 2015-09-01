@@ -5,7 +5,7 @@ import java.io.File
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.role.client.Client
-import com.github.lucastorri.moca.role.client.Client.Command.{CheckWorkRepoConsistency, AddSeedFile}
+import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.work.WorkRepo
@@ -17,7 +17,7 @@ case class MocaConfig(
   port: Int = 1731,
   hostname: String = "",
   workers: Int = 10,
-  clientCommands: Set[Client.Command] = Set.empty,
+  clientCommands: Set[Client.Command[_]] = Set.empty,
   extraConfig: Option[File] = Option.empty,
   private var _roles: Set[String] = Set(Master.role, Worker.role)
 ) {
@@ -31,7 +31,7 @@ case class MocaConfig(
   def hasRole(role: String): Boolean =
     roles.contains(role)
 
-  val main: Config = {
+  lazy val main: Config = {
     val rolesArray = stringArray(roles)
     val hostnameString =
       if (isNotSingleInstance) quote(hostname)
@@ -62,21 +62,22 @@ case class MocaConfig(
       .resolve()
   }
 
-  def system: ActorSystem =
+  lazy val system: ActorSystem =
     ActorSystem(systemName, main)
 
   def workRepo: WorkRepo = {
     val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
     val clazz = Class.forName(repoConfig.getString("class"))
 
-    val constructors = clazz.getConstructors
-    def emptyConstructor =
-      constructors.find(_.getParameterTypes.isEmpty).map(_.newInstance())
-    def configConstructor =
-      constructors.find(_.getParameterTypes.toList == List(classOf[Config])).map(_.newInstance(repoConfig))
+    val availableParams = Map[Class[_], AnyRef](
+      classOf[Config] -> repoConfig,
+      classOf[ActorSystem] -> system
+    )
 
-    emptyConstructor.orElse(configConstructor)
-      .get.asInstanceOf[WorkRepo]
+    clazz.getConstructors
+      .find { c => c.getParameterTypes.forall(param => availableParams.contains(param)) }
+      .map { c => c.newInstance(c.getParameterTypes.map(availableParams): _*).asInstanceOf[WorkRepo] }
+      .getOrElse(sys.error(s"Parameters not available for class $clazz"))
   }
 
 }
@@ -110,6 +111,11 @@ object MocaConfig {
     opt[Unit]("check-repo")
       .text("check if any work marked as in progress is still happening")
       .action { (_, c) => c.copy(clientCommands = c.clientCommands + CheckWorkRepoConsistency()) }
+
+    opt[String]('r', "results-for")
+      .valueName("seed-id")
+      .text("get results for a given seed")
+      .action { (r, c) => c.copy(clientCommands = c.clientCommands + GetSeedResults(r)) }
 
     opt[Int]('p', "port")
       .text("main system port")
