@@ -18,3 +18,10 @@ libraryDependencies ++= Seq(
   "com.github.scopt" %% "scopt" % "3.3.0",
   "org.mapdb" % "mapdb" % "2.0-beta6",
   "com.esotericsoftware" % "kryo" % "3.0.3")
+
+mainClass in assembly := Some("com.github.lucastorri.moca.Moca")
+
+assemblyOption in assembly := (assemblyOption in assembly).value
+  .copy(prependShellScript = Some(Seq("#!/usr/bin/env sh", "exec java -jar \"$0\" \"$@\"")))
+
+assemblyJarName in assembly := s"${name.value}-${version.value}"
