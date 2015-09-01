@@ -16,6 +16,8 @@ object Messages {
   case class AddSeeds(seeds: Set[Work])
   case object WorkAvailable { val topic = "work-announcement" }
 
+  case object ConsistencyCheck
+
   implicit class Acked(future: Future[Any]) {
 
     def acked()(implicit exec: ExecutionContext): Future[Any] = future.filter(_ == Ack)

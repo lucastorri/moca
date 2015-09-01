@@ -8,8 +8,8 @@ import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
+import com.github.lucastorri.moca.role.master.Master.Event
 import com.github.lucastorri.moca.role.master.Master.Event.{WorkDone, WorkFailed, WorkStarted, WorkerTerminated}
-import com.github.lucastorri.moca.role.master.Master.{CleanUp, ConsistencyCheck, Event, Reply}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -99,6 +99,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
     case ConsistencyCheck =>
       //TODO check if any work that was made available is not on the current state
+      sender() ! Ack
 
     case SaveSnapshotSuccess(meta) =>
       if (journalNumberOnSnapshot - 1 > 0) deleteMessages(journalNumberOnSnapshot - 1)
@@ -142,6 +143,9 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def journalPluginId: String = system.settings.config.getString("moca.master.journal-plugin-id")
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 
+  case object CleanUp
+  case class Reply(who: ActorRef, offer: WorkOffer)
+
 }
 
 object Master {
@@ -171,9 +175,5 @@ object Master {
     case class WorkerTerminated(who: ActorRef) extends Event
     case class WorkDone(who: ActorRef, workId: String) extends Event
   }
-
-  case object CleanUp
-  case object ConsistencyCheck
-  case class Reply(who: ActorRef, offer: WorkOffer)
 
 }

@@ -5,7 +5,7 @@ import java.io.File
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.role.client.Client
-import com.github.lucastorri.moca.role.client.Client.Command.AddSeedFile
+import com.github.lucastorri.moca.role.client.Client.Command.{CheckWorkRepoConsistency, AddSeedFile}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.work.WorkRepo
@@ -106,6 +106,10 @@ object MocaConfig {
       .text("url seeds file to be added")
       .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
       .action { (f, c) => c.copy(clientCommands = c.clientCommands + AddSeedFile(f)) }
+
+    opt[Unit]("check-repo")
+      .text("check if any work marked as in progress is still happening")
+      .action { (_, c) => c.copy(clientCommands = c.clientCommands + CheckWorkRepoConsistency()) }
 
     opt[Int]('p', "port")
       .text("main system port")

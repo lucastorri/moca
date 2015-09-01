@@ -9,7 +9,7 @@ import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.client.Client.Command.AddSeedFile
+import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
@@ -33,6 +33,10 @@ class Client extends Actor with StrictLogging {
       val batch = AddBatch(file)
       self ! batch
       batch.promise.future
+    }
+
+    case check @ CheckWorkRepoConsistency() => check.reply {
+      (master ? ConsistencyCheck).map(_ => ())
     }
 
     case batch: AddBatch =>
@@ -116,6 +120,7 @@ object Client {
 
   object Command {
     case class AddSeedFile(file: File) extends Command
+    case class CheckWorkRepoConsistency() extends Command
   }
 
 }
