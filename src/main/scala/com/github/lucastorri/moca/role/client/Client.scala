@@ -6,17 +6,16 @@ import akka.actor.{Actor, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
+import com.github.lucastorri.moca.config.SeedInputParser
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.store.content.WorkContentTransfer
-import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 class Client extends Actor with StrictLogging {
@@ -50,10 +49,7 @@ class Client extends Actor with StrictLogging {
         logger.info(s"Successfully added seeds from ${batch.file}")
         batch.promise.success(())
       } else {
-        val next = batch.next.map { n =>
-          val url = Url(n)
-          Work(url.id, url)
-        }
+        val next = batch.next
         retry(3)(master ? AddSeeds(next)).acked.onComplete {
           case Success(_) =>
             logger.info(s"Added ${batch.processed}/${batch.total} of ${batch.file}")
@@ -72,12 +68,7 @@ class Client extends Actor with StrictLogging {
 
   case class AddBatch(file: File) {
 
-    private var groups = {
-      val source = Source.fromFile(file)
-      val seeds = source.getLines().toSet
-      source.close()
-      seeds.grouped(50).toSeq
-    }
+    private var groups = SeedInputParser.fromFile(file).toSet.grouped(50).toSeq
 
     val total = groups.size
 
@@ -87,7 +78,7 @@ class Client extends Actor with StrictLogging {
     
     def isEmpty: Boolean = groups.isEmpty
     
-    def next: Set[String] = {
+    def next: Set[Work] = {
       val next = groups.head
       groups = groups.tail
       next
@@ -129,7 +120,7 @@ object Client {
   object Command {
     case class AddSeedFile(file: File) extends Command[Unit](_ => "success")
     case class CheckWorkRepoConsistency() extends Command[Unit](_ => "success")
-    case class GetSeedResults(seedId: String) extends Command[WorkContentTransfer](_.contents.mkString("\n"))
+    case class GetSeedResults(seedId: String) extends Command[WorkContentTransfer](_.contents.mkString("\n", "\n", ""))
   }
 
   case class CommandResult[T](cmd: Command[T], result: Try[T])(str: T => String) {

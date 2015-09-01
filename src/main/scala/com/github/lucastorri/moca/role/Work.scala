@@ -7,9 +7,7 @@ import com.github.lucastorri.moca.url.Url
 
 import scala.concurrent.duration._
 
-case class Work(id: String, seed: Url) {
-
-  def criteria: LinkSelectionCriteria = LinkSelectionCriteria.default
+case class Work(id: String, seed: Url, criteria: LinkSelectionCriteria) {
 
   def intervalBetweenRequests: FiniteDuration = 5.seconds
 

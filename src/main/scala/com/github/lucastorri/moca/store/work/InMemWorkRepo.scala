@@ -2,24 +2,23 @@ package com.github.lucastorri.moca.store.work
 
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.store.content.WorkContentTransfer
-import com.github.lucastorri.moca.url.Url
 
 import scala.collection.mutable
 import scala.concurrent.Future
 
 class InMemWorkRepo extends WorkRepo {
 
-  private val work = mutable.HashMap.empty[String, String]
-  private val open = mutable.HashMap.empty[String, String]
+  private val work = mutable.HashMap.empty[String, Work]
+  private val open = mutable.HashMap.empty[String, Work]
   private val done = mutable.HashMap.empty[String, WorkContentTransfer]
 
   override def available(): Future[Option[Work]] = {
-    val w = work.headOption.map { case (id, seed) =>
+    val selected = work.headOption.map { case (id, w) =>
       work.remove(id)
-      open(id) = seed
-      Work(id, Url(seed))
+      open(id) = w
+      w
     }
-    Future.successful(w)
+    Future.successful(selected)
   }
 
   override def done(workId: String, transfer: WorkContentTransfer): Future[Unit] = {
@@ -43,7 +42,7 @@ class InMemWorkRepo extends WorkRepo {
   }
 
   override def addAll(seeds: Set[Work]): Future[Unit] = {
-    seeds.foreach(w => work(w.id) = w.seed.toString)
+    seeds.foreach(w => work(w.id) = w)
     Future.successful(())
   }
 

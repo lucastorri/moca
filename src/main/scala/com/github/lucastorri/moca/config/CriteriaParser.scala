@@ -17,14 +17,16 @@ object CriteriaParser {
   private[CriteriaParser] def filter(className: String): FilteredCriteria.Filter =
     Class.forName(className).newInstance().asInstanceOf[FilteredCriteria.Filter]
 
-  def fromString(str: String): ParsedCriteria =
+  def fromString(str: String): Map[String, LinkSelectionCriteria] =
     fromLines(str.lines)
 
-  def fromLines(input: Iterable[String]): ParsedCriteria =
+  def fromLines(input: Iterable[String]): Map[String, LinkSelectionCriteria] =
     fromLines(input.iterator)
 
-  def fromLines(input: Iterator[String]): ParsedCriteria =
-    ParsedCriteria(grouped(input).map(parse).toMap.withDefaultValue(LinkSelectionCriteria.default))
+  def fromLines(input: Iterator[String]): Map[String, LinkSelectionCriteria] = {
+    val map = grouped(input).map(parse).toMap
+    map.withDefaultValue(map.getOrElse("default", LinkSelectionCriteria.default))
+  }
 
   private def grouped(input: Iterator[String]): Seq[Seq[String]] = {
     val groups = mutable.ListBuffer.empty[Seq[String]]
@@ -63,4 +65,3 @@ object CriteriaParser {
 
 }
 
-case class ParsedCriteria(named: Map[String, LinkSelectionCriteria])

@@ -27,15 +27,26 @@ class CriteriaParserTest extends FlatSpec with MustMatchers {
       """.stripMargin)
 
 
-    parsed.named.size must equal (3)
+    parsed.size must equal (3)
 
-    val FilteredCriteria(MaxDepthCriteria(AHrefCriteria, 5), filter) = parsed.named("criteria-1")
-    val MaxDepthCriteria(StringJSCriteria(js), 3) = parsed.named("criteria-2")
+    val FilteredCriteria(MaxDepthCriteria(AHrefCriteria, 5), filter) = parsed("criteria-1")
+    val MaxDepthCriteria(StringJSCriteria(js), 3) = parsed("criteria-2")
 
-    parsed.named("criteria-3") must equal (AHrefCriteria)
+    parsed("criteria-3") must equal (AHrefCriteria)
     filter.getClass must equal(classOf[FakeFilter])
     js must equal (script)
-    parsed.named("unknown") must equal (LinkSelectionCriteria.default)
+    parsed("unknown") must equal (LinkSelectionCriteria.default)
+  }
+
+  it must "allow a default criteria" in {
+    val parsed = CriteriaParser.fromString(
+      s"""
+         |!& default
+         |!= max-depth 7
+         |!= js test();
+       """.stripMargin)
+
+    val MaxDepthCriteria(StringJSCriteria("test();"), 7) = parsed("")
   }
 
 }

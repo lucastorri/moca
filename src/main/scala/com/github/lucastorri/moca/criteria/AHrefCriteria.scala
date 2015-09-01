@@ -22,7 +22,7 @@ trait AHrefCriteria extends LinkSelectionCriteria {
 
  }
 
-object AHrefCriteria extends AHrefCriteria
+case object AHrefCriteria extends AHrefCriteria
 
 
 
