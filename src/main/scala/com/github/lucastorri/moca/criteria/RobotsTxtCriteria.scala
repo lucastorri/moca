@@ -11,6 +11,7 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import crawlercommons.robots.{BaseRobotRules, SimpleRobotRulesParser}
 import org.apache.commons.io.IOUtils
+import scala.collection.JavaConversions._
 
 import scala.util.Try
 
@@ -28,14 +29,10 @@ object RobotsTxtCriteria extends StrictLogging {
 
   private[RobotsTxtCriteria] val cache = LRUCache[String, BaseRobotRules](1024)
 
-  private[RobotsTxtCriteria] def get(url: Url): BaseRobotRules = {
-    val key = url.host
+  private[RobotsTxtCriteria] def get(url: Url): BaseRobotRules =
+    cache.getOrElseUpdate(url.host, fetch(url))
 
-    if (cache.containsKey(key)) cache.get(key)
-    else cache.put(key, fetch(url))
-  }
-
-  private[this] def fetch(url: Url): BaseRobotRules = {
+  private def fetch(url: Url): BaseRobotRules = {
     val robots = url.resolve("/robots.txt").toURL
     var in: InputStream = null
     val content =
