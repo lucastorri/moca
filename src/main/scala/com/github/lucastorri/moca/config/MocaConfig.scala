@@ -8,6 +8,7 @@ import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
+import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -67,17 +68,16 @@ case class MocaConfig(
 
   def workRepo: WorkRepo = {
     val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
-    val clazz = Class.forName(repoConfig.getString("class"))
+    val build = ClassBuilder.fromConfig(repoConfig, classOf[ActorSystem] -> system)
 
-    val availableParams = Map[Class[_], AnyRef](
-      classOf[Config] -> repoConfig,
-      classOf[ActorSystem] -> system
-    )
+    build()
+  }
 
-    clazz.getConstructors
-      .find { c => c.getParameterTypes.forall(param => availableParams.contains(param)) }
-      .map { c => c.newInstance(c.getParameterTypes.map(availableParams): _*).asInstanceOf[WorkRepo] }
-      .getOrElse(sys.error(s"Parameters not available for class $clazz"))
+  def contentRepo: ContentRepo = {
+    val repoConfig = main.getConfig(main.getString("moca.content-repo-id"))
+    val build = ClassBuilder.fromConfig(repoConfig, classOf[ActorSystem] -> system)
+
+    build()
   }
 
 }

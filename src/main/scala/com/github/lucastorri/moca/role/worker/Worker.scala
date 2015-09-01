@@ -10,13 +10,13 @@ import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker._
-import com.github.lucastorri.moca.store.content.{ContentRepo, InMemContentRepo}
+import com.github.lucastorri.moca.store.content.ContentRepo
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
+class Worker(repo: ContentRepo) extends Actor with FSM[State, Option[Work]] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 10.seconds
@@ -24,7 +24,6 @@ class Worker extends Actor with FSM[State, Option[Work]] with StrictLogging {
   private val mediator = DistributedPubSub(context.system).mediator
   private val requestWorkInterval = 5.minute
   private val master = Master.proxy()
-  private val repo: ContentRepo = new InMemContentRepo
   private var currentWork: Work = _
 
   override def preStart(): Unit = {
@@ -94,8 +93,8 @@ object Worker {
 
   val role = "worker"
 
-  def start(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props[Worker], s"worker-$id")
+  def start(repo: ContentRepo)(id: Int)(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(new Worker(repo)), s"worker-$id")
   }
 
   sealed trait State

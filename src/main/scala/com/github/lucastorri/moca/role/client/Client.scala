@@ -1,7 +1,6 @@
 package com.github.lucastorri.moca.role.client
 
 import java.io.File
-import java.security.MessageDigest
 
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.pattern.ask
@@ -51,7 +50,10 @@ class Client extends Actor with StrictLogging {
         logger.info(s"Successfully added seeds from ${batch.file}")
         batch.promise.success(())
       } else {
-        val next = batch.next.map(url => Work(id(url), Url(url)))
+        val next = batch.next.map { n =>
+          val url = Url(n)
+          Work(url.id, url)
+        }
         retry(3)(master ? AddSeeds(next)).acked.onComplete {
           case Success(_) =>
             logger.info(s"Added ${batch.processed}/${batch.total} of ${batch.file}")
@@ -92,12 +94,6 @@ class Client extends Actor with StrictLogging {
     }
 
   }
-
-  def id(str: String): String =
-    MessageDigest.getInstance("SHA1")
-      .digest(str.getBytes)
-      .map("%02x".format(_))
-      .mkString
 
 }
 
