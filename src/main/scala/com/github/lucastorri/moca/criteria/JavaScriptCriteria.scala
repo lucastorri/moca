@@ -4,13 +4,19 @@ import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.worker.OutLink
 import com.github.lucastorri.moca.url.Url
+import netscape.javascript.JSObject
+
+import scala.util.Try
 
 trait JavaScriptCriteria extends LinkSelectionCriteria {
 
   def script: String
 
-  override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] =
-    page.exec(script).asInstanceOf[Array[String]].map(Url.apply).toSet
+  override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] = {
+    val obj = page.exec(script).asInstanceOf[JSObject]
+    val length = Try(obj.getMember("length").asInstanceOf[Number].intValue).getOrElse(0)
+    (0 until length).flatMap(i => Try(Url(obj.getSlot(i).toString)).toOption).toSet
+  }
 
 }
 
