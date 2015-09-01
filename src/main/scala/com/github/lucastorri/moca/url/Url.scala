@@ -1,11 +1,16 @@
 package com.github.lucastorri.moca.url
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.security.MessageDigest
+
+import crawlercommons.url.EffectiveTldFinder
 
 import scala.util.Try
 
 class Url private[Url](override val toString: String) extends Serializable {
+
+  @transient
+  private[this] lazy val _uri = new URI(toString)
 
   def id: String =
     MessageDigest.getInstance("SHA1")
@@ -13,7 +18,30 @@ class Url private[Url](override val toString: String) extends Serializable {
       .map("%02x".format(_))
       .mkString
 
-  override def hashCode: Int = toString.hashCode()
+  def host: String =
+    _uri.getHost
+
+  def domain: String =
+    EffectiveTldFinder.getAssignedDomain(host)
+
+  def protocol: String =
+    _uri.getScheme
+
+  def port: Int =
+    _uri.getPort match {
+      case -1 if protocol == "http" => 80
+      case -1 if protocol == "https" => 443
+      case n => n
+    }
+
+  def resolve(path: String): Url =
+    Url(_uri.resolve(path).toString)
+
+  def root: Url =
+    resolve("/")
+
+  override def hashCode: Int =
+    toString.hashCode()
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case other: Url => other.toString == toString
@@ -25,8 +53,7 @@ class Url private[Url](override val toString: String) extends Serializable {
 object Url {
 
   def apply(url: String): Url = {
-    test(url)
-    new Url(url)
+    new Url(test(url).toURI.normalize().toString)
   }
 
   def parse(url: String): Option[Url] =
@@ -35,7 +62,7 @@ object Url {
   def isValid(url: String): Boolean =
     Try(test(url)).isSuccess
 
-  private def test(url: String): Unit =
+  private def test(url: String): URL =
     new URL(url)
 
 }

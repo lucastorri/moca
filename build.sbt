@@ -18,7 +18,8 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.1.3",
   "com.github.scopt" %% "scopt" % "3.3.0",
   "org.mapdb" % "mapdb" % "2.0-beta6",
-  "com.esotericsoftware" % "kryo" % "3.0.3")
+  "com.esotericsoftware" % "kryo" % "3.0.3",
+  "com.github.crawler-commons" % "crawler-commons" % "0.6")
 
 mainClass in assembly := Some("com.github.lucastorri.moca.Moca")
 
