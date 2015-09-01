@@ -8,7 +8,7 @@ import scala.collection.mutable
 object CriteriaParser {
 
   val factories = Map[String, (IndexedSeq[String], LinkSelectionCriteria) => LinkSelectionCriteria](
-    "a-href" -> { (_, _) => JSoupCriteria },
+    "a-href" -> { (_, _) => AHrefCriteria },
     "js" -> { (params, _) => StringJSCriteria(params.head) },
     "max-depth" -> { (params, current) => MaxDepthCriteria(current, params.head.toInt) },
     "filter" -> { (params, current) => FilteredCriteria(current, filter(params.head)) }
@@ -24,7 +24,7 @@ object CriteriaParser {
     fromLines(input.iterator)
 
   def fromLines(input: Iterator[String]): ParsedCriteria =
-    new ParsedCriteria (grouped(input).map(parse).toMap)
+    ParsedCriteria(grouped(input).map(parse).toMap.withDefaultValue(LinkSelectionCriteria.default))
 
   private def grouped(input: Iterator[String]): Seq[Seq[String]] = {
     val groups = mutable.ListBuffer.empty[Seq[String]]

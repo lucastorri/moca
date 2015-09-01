@@ -1,11 +1,11 @@
 package com.github.lucastorri.moca.config
 
 import com.github.lucastorri.moca.browser.RenderedPage
-import com.github.lucastorri.moca.criteria.{StringJSCriteria, MaxDepthCriteria, JSoupCriteria, FilteredCriteria}
+import com.github.lucastorri.moca.criteria._
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.worker.OutLink
 import com.github.lucastorri.moca.url.Url
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 
 class CriteriaParserTest extends FlatSpec with MustMatchers {
 
@@ -29,12 +29,13 @@ class CriteriaParserTest extends FlatSpec with MustMatchers {
 
     parsed.named.size must equal (3)
 
-    val FilteredCriteria(MaxDepthCriteria(JSoupCriteria, 5), filter) = parsed.named("criteria-1")
+    val FilteredCriteria(MaxDepthCriteria(AHrefCriteria, 5), filter) = parsed.named("criteria-1")
     val MaxDepthCriteria(StringJSCriteria(js), 3) = parsed.named("criteria-2")
 
-    parsed.named("criteria-3") must equal (JSoupCriteria)
+    parsed.named("criteria-3") must equal (AHrefCriteria)
     filter.getClass must equal(classOf[FakeFilter])
     js must equal (script)
+    parsed.named("unknown") must equal (LinkSelectionCriteria.default)
   }
 
 }

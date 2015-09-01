@@ -13,8 +13,8 @@ trait LinkSelectionCriteria {
 
 }
 
+object LinkSelectionCriteria {
 
+  val default: LinkSelectionCriteria = MaxDepthCriteria(AHrefCriteria, 2)
 
-
-
-
+}

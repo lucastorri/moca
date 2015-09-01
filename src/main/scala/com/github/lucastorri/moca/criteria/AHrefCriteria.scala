@@ -8,7 +8,7 @@ import org.jsoup.Jsoup
 
 import scala.collection.JavaConversions._
 
-trait JSoupCriteria extends LinkSelectionCriteria {
+trait AHrefCriteria extends LinkSelectionCriteria {
 
   def url(page: RenderedPage): Url =
     page.originalUrl
@@ -22,7 +22,7 @@ trait JSoupCriteria extends LinkSelectionCriteria {
 
  }
 
-object JSoupCriteria extends JSoupCriteria
+object AHrefCriteria extends AHrefCriteria
 
 
 
