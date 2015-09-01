@@ -2,10 +2,14 @@ package com.github.lucastorri.moca.config
 
 import java.io.File
 
+import akka.actor.ActorSystem
+import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.AddSeedFile
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
+import com.github.lucastorri.moca.store.work.WorkRepo
+import com.typesafe.config.{Config, ConfigFactory}
 
 case class MocaConfig(
   systemName: String = "MocaSystem",
@@ -26,6 +30,54 @@ case class MocaConfig(
 
   def hasRole(role: String): Boolean =
     roles.contains(role)
+
+  val main: Config = {
+    val rolesArray = stringArray(roles)
+    val hostnameString =
+      if (isNotSingleInstance) quote(hostname)
+      else quote("127.0.0.1")
+    val seedArray =
+      if (isNotSingleInstance) stringArray(seeds.map(hostAndPort => seed(systemName, hostAndPort)))
+      else stringArray(seed(systemName, s"127.0.0.1:$port"))
+
+    val extraCfg = extraConfig match {
+      case Some(f) => ConfigFactory.parseFile(f)
+      case None => ConfigFactory.parseString("")
+    }
+
+    val resolveCfg = ConfigFactory.parseString(s"""
+        |resolve {
+        |  roles = $rolesArray
+        |  seeds = $seedArray
+        |  port = $port
+        |  host = $hostnameString
+        |}
+      """.stripMargin)
+
+    val mainCfg = ConfigFactory.parseResourcesAnySyntax("main.conf")
+
+    extraCfg
+      .withFallback(mainCfg)
+      .withFallback(resolveCfg)
+      .resolve()
+  }
+
+  def system: ActorSystem =
+    ActorSystem(systemName, main)
+
+  def workRepo: WorkRepo = {
+    val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
+    val clazz = Class.forName(repoConfig.getString("class"))
+
+    val constructors = clazz.getConstructors
+    def emptyConstructor =
+      constructors.find(_.getParameterTypes.isEmpty).map(_.newInstance())
+    def configConstructor =
+      constructors.find(_.getParameterTypes.toList == List(classOf[Config])).map(_.newInstance(repoConfig))
+
+    emptyConstructor.orElse(configConstructor)
+      .get.asInstanceOf[WorkRepo]
+  }
 
 }
 
@@ -79,5 +131,18 @@ object MocaConfig {
 
   def parse(args: Array[String]): MocaConfig =
     parser.parse(args, MocaConfig()).getOrElse(sys.exit(1))
+
+
+  private def seed(systemName: String, hostAndPort: String): String =
+    s"akka.tcp://$systemName@$hostAndPort"
+
+  private def stringArray(strings: Iterable[String]): String =
+    strings.map(quote).mkString("[", ",", "]")
+
+  private def quote(str: String): String =
+    "\"" + str + "\""
+
+  private def stringArray(strings: String*): String =
+    stringArray(strings)
 
 }

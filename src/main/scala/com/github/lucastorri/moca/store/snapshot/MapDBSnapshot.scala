@@ -16,6 +16,7 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
   import context._
 
   val base = Paths.get(config.getString("directory"))
+  val increment = config.getMemorySize("allocate-increment")
 
   override def preStart(): Unit = {
     base.toFile.getAbsoluteFile.mkdirs()
@@ -56,12 +57,11 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
 
   private case class DBUnit(persistenceId: String) extends KryoSerialization[Any](system) {
 
-    private val _4MB = 4 * 1024 * 1024
     private val db = DBMaker
       .appendFileDB(base.resolve(persistenceId).toFile)
       .closeOnJvmShutdown()
       .fileMmapEnableIfSupported()
-      .allocateIncrement(_4MB)
+      .allocateIncrement(increment.toBytes)
       .make()
 
     private val map = db.hashMap[SnapshotMetadata, Array[Byte]]("snapshots")

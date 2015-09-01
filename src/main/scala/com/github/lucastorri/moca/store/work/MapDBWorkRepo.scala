@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.url.Url
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import org.mapdb.DBMaker
 
@@ -11,22 +12,21 @@ import scala.collection.JavaConversions._
 import scala.concurrent.Future
 import scala.util.Try
 
-class MapDBWorkRepo extends WorkRepo with StrictLogging {
+class MapDBWorkRepo(config: Config) extends WorkRepo with StrictLogging {
 
-  //TODO make configurable
-  private val path = Paths.get("works")
+  val base = Paths.get(config.getString("file"))
+  val increment = config.getMemorySize("allocate-increment")
 
-  private val _1MB = 1 * 1024 * 1024
   private val db = DBMaker
-    .appendFileDB(path.toFile)
+    .appendFileDB(base.toFile)
     .closeOnJvmShutdown()
     .cacheLRUEnable()
     .fileMmapEnableIfSupported()
-    .allocateIncrement(_1MB)
+    .allocateIncrement(increment.toBytes)
     .make()
 
-  private val work = db.hashMap[String, String]("work-available")
-  private val open = db.hashMap[String, String]("work-in-progress")
+  private val work = db.hashMap[String, String]("available")
+  private val open = db.hashMap[String, String]("in-progress")
 
 
   override def available(): Future[Work] = transaction {

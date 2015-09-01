@@ -20,9 +20,7 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
   import context._
 
   val base = Paths.get(config.getString("directory"))
-
-  private val _2MB = 2 * 1024 * 1024
-
+  val increment = config.getMemorySize("allocate-increment")
 
   override def preStart(): Unit = {
     base.toFile.getAbsoluteFile.mkdirs()
@@ -72,7 +70,7 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
       .appendFileDB(base.resolve(persistenceId).toFile)
       .closeOnJvmShutdown()
       .fileMmapEnableIfSupported()
-      .allocateIncrement(_2MB)
+      .allocateIncrement(increment.toBytes)
       .make()
 
     private lazy val map = db.hashMap[Long, Array[Byte]]("entries")
