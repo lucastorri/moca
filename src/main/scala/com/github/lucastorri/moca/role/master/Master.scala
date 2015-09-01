@@ -138,7 +138,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
     case _ => logger.error(s"Unknown message $message")
   }
     
-  override val persistenceId: String = s"${Master.name}-persistence"
+  override val persistenceId: String = Master.name
   override def journalPluginId: String = system.settings.config.getString("moca.master.journal-plugin-id")
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 

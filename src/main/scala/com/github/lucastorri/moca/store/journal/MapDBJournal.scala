@@ -68,10 +68,8 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
 
   private case class DBUnit(persistenceId: String) extends KryoSerialization[CustomPersistentRepr](system) {
 
-    val name = s"journal-$persistenceId"
-
     private val db = DBMaker
-      .appendFileDB(base.resolve(name).toFile)
+      .appendFileDB(base.resolve(persistenceId).toFile)
       .closeOnJvmShutdown()
       .fileMmapEnableIfSupported()
       .allocateIncrement(_2MB)
