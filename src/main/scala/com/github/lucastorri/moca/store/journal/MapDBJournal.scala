@@ -19,53 +19,67 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
 
   import context._
 
-  val base = Paths.get(config.getString("file-path"))
+  val base = Paths.get(config.getString("directory"))
 
-  private val _16MB = 16 * 1024 * 1024
-  private val db = DBMaker
-    .appendFileDB(base.toFile)
-    .closeOnJvmShutdown()
-    .cacheLRUEnable()
-    .fileMmapEnableIfSupported()
-    .allocateIncrement(_16MB)
-    .make()
+  private val _2MB = 2 * 1024 * 1024
 
 
   override def preStart(): Unit = {
-    base.toFile.getAbsoluteFile.getParentFile.mkdirs()
+    base.toFile.getAbsoluteFile.mkdirs()
   }
 
-  override def asyncWriteMessages(messages: immutable.Seq[AtomicWrite]): Future[immutable.Seq[Try[Unit]]] = transaction {
-    messages.map { write => Try(DBUnit(write.persistenceId).addAll(write.payload)) }
+  override def asyncWriteMessages(messages: immutable.Seq[AtomicWrite]): Future[immutable.Seq[Try[Unit]]] = {
+    Future.sequence {
+      messages.map { write =>
+        transaction(write.persistenceId) { db =>
+          Try(db.addAll(write.payload))
+        }
+      }
+    }
   }
 
-  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = transaction {
-    DBUnit(persistenceId).deleteTo(toSequenceNr)
+  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+    transaction(persistenceId) { db =>
+      db.deleteTo(toSequenceNr)
+    }
   }
 
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = transaction {
-    DBUnit(persistenceId).last
+  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+    transaction(persistenceId) { db =>
+      db.last
+    }
   }
 
-  override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(recoveryCallback: (PersistentRepr) => Unit): Future[Unit] = Future {
-    val upperBound = if (toSequenceNr - fromSequenceNr + 1 > max) fromSequenceNr + max - 1 else toSequenceNr
-    DBUnit(persistenceId).entries(fromSequenceNr to upperBound).foreach(recoveryCallback)
+  override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(recoveryCallback: (PersistentRepr) => Unit): Future[Unit] = {
+    transaction(persistenceId, commit = false) { db =>
+      val upperBound = if (toSequenceNr - fromSequenceNr + 1 > max) fromSequenceNr + max - 1 else toSequenceNr
+      db.entries(fromSequenceNr to upperBound).foreach(recoveryCallback)
+    }
   }
 
 
-  private def transaction[T](f: => T): Future[T] = Future {
-    val result = f
-    db.commit()
+  private def transaction[T](persistenceId: String, commit: Boolean = true)(f: DBUnit => T): Future[T] = Future {
+    val db = DBUnit(persistenceId)
+    val result = f(db)
+    if (commit) db.commit()
+    db.close()
     result
   }
 
   private case class DBUnit(persistenceId: String) extends KryoSerialization[CustomPersistentRepr](system) {
 
-    val prefix = s"journal-$persistenceId"
+    val name = s"journal-$persistenceId"
 
-    private lazy val map = db.hashMap[Long, Array[Byte]](s"$prefix-entries")
-    private lazy val max = db.atomicLong(s"$prefix-max")
-    private lazy val min = db.atomicLong(s"$prefix-min")
+    private val db = DBMaker
+      .appendFileDB(base.resolve(name).toFile)
+      .closeOnJvmShutdown()
+      .fileMmapEnableIfSupported()
+      .allocateIncrement(_2MB)
+      .make()
+
+    private lazy val map = db.hashMap[Long, Array[Byte]]("entries")
+    private lazy val max = db.atomicLong("max")
+    private lazy val min = db.atomicLong("min")
 
     def last: Long = max.get()
 
@@ -81,6 +95,12 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
 
     def entries(range: NumericRange[Long]): Stream[PersistentRepr] =
       range.toStream.map(map.get).filter(_ != null).map(deserialize)
+
+    def commit(): Unit =
+      db.commit()
+
+    def close(): Unit =
+      db.close()
 
   }
 
