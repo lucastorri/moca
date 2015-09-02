@@ -3,6 +3,7 @@ package com.github.lucastorri.moca.config
 import java.io.File
 
 import akka.actor.ActorSystem
+import com.github.lucastorri.moca.browser.BrowserProvider
 import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
@@ -83,6 +84,9 @@ case class MocaConfig(
   
   def partition: PartitionSelector =
     ClassBuilder(main.getString("moca.partition-selector"))()
+
+  def browserProvider: BrowserProvider =
+    ClassBuilder(main.getString("moca.browser-provider"))()
 
 }
 
