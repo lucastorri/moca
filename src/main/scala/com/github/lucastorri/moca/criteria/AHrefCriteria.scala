@@ -11,7 +11,7 @@ import scala.collection.JavaConversions._
 trait AHrefCriteria extends LinkSelectionCriteria {
 
   def url(page: RenderedPage): Url =
-    page.originalUrl
+    page.currentUrl
 
   override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] =
      Jsoup.parse(page.html, url(page).toString)
