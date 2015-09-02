@@ -24,8 +24,10 @@ object SeedInputParser {
     val criteria = CriteriaParser.fromLines(criteriaLines)
 
     seedLines.map { line =>
-      val Array(id, url, name) = line.replaceAll("\\|", " | ").split("\\|").map(_.trim).padTo(3, "")
-      Work(id, Url(url), criteria(name))
+      val Array(url, id, name) = line.replaceAll("\\|", " | ").split("\\|").map(_.trim).padTo(3, "")
+      val seed = Url(url)
+      val selectedId = if (id.nonEmpty) id else seed.id
+      Work(selectedId, seed, criteria(name))
     }
   }
 
