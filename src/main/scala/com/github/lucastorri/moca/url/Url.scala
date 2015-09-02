@@ -55,7 +55,7 @@ class Url private[Url](override val toString: String) extends Serializable {
 
 object Url {
 
-  def apply(url: String): Url = {
+  def apply(url: String): Url = { //TODO drop #blah
     new Url(test(url).toURI.normalize().toString)
   }
 

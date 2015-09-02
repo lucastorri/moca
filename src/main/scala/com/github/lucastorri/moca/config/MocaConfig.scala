@@ -84,11 +84,7 @@ case class MocaConfig(
 
 object MocaConfig {
 
-  //TODO use generator
-  val v = "0.0.1"
-  val name = "moca"
-
-  private val parser = new scopt.OptionParser[MocaConfig](name) {
+  private val parser = new scopt.OptionParser[MocaConfig](BuildInfo.name) {
 
     head(BuildInfo.name, BuildInfo.version)
 
