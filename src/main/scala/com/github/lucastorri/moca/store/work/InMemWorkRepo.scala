@@ -10,6 +10,7 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Random
 
+//TODO it can end running two workers on the same host
 class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLogging {
 
   private val workAdded = mutable.HashMap.empty[String, Work]
@@ -95,7 +96,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
     newTasks(Set(work.seed), 0)
 
     def newTasks(urls: Set[Url], depth: Int): Unit = {
-      urls.groupBy(partition.partition)
+      urls.groupBy(partition.apply)
         .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue)))
         .filter { case (_, group) => group.nonEmpty }
         .foreach { case (part, group) =>

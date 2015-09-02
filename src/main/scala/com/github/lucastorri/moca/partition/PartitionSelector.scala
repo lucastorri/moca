@@ -5,12 +5,12 @@ import com.github.lucastorri.moca.url.Url
 
 trait PartitionSelector {
   
-  def partition(url: Url): String
+  def apply(url: Url): String
 
   final def same(task: Task, url: Url): Boolean =
-    task.partition == partition(url)
+    task.partition == apply(url)
 
   final def same(url1: Url, url2: Url): Boolean =
-    partition(url1) == partition(url2)
+    apply(url1) == apply(url2)
   
 }

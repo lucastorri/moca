@@ -1,8 +1,8 @@
 package com.github.lucastorri.moca.criteria
 
 import com.github.lucastorri.moca.browser.RenderedPage
-import com.github.lucastorri.moca.role.{Task, Work}
-import com.github.lucastorri.moca.role.worker.{Link, Link$}
+import com.github.lucastorri.moca.role.Task
+import com.github.lucastorri.moca.role.worker.Link
 import com.github.lucastorri.moca.url.Url
 import netscape.javascript.JSObject
 

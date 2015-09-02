@@ -8,9 +8,9 @@ import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.browser.BrowserProvider
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Messages._
+import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker._
-import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.typesafe.scalalogging.StrictLogging
 

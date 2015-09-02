@@ -1,7 +1,7 @@
 package com.github.lucastorri.moca.store.content
 
 import com.github.lucastorri.moca.browser.Content
-import com.github.lucastorri.moca.role.{Task, Work}
+import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.url.Url
 
 import scala.concurrent.Future
