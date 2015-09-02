@@ -9,14 +9,14 @@ import akka.util.Timeout
 import com.github.lucastorri.moca.async.{noop, retry}
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.master.Master.Event
-import com.github.lucastorri.moca.role.master.Master.Event.{WorkDone, WorkFailed, WorkStarted, WorkerTerminated}
+import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
+class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
@@ -34,14 +34,14 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def receiveRecover: Receive = {
 
     case e: Event => e match {
-      case WorkStarted(who, workId) =>
-        state = state.start(who, workId)
-      case WorkFailed(who, workId) =>
-        state = state.cancel(who, workId)
-      case WorkerTerminated(who) =>
+      case TaskStarted(who, taskId) =>
+        state = state.start(who, taskId)
+      case TaskFailed(who, taskId) =>
+        state = state.cancel(who, taskId)
+      case WorkerDied(who) =>
         state = state.cancel(who)
-      case WorkDone(who, workId) =>
-        state = state.done(who, workId)
+      case TaskDone(who, taskId) =>
+        state = state.done(who, taskId)
     }
     
     case SnapshotOffer(meta, s: State) =>
@@ -57,32 +57,32 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
   override def receiveCommand: Receive = {
 
-    case WorkRequest =>
+    case TaskRequest =>
       val who = sender()
-      works.available().onComplete {
-        case Success(Some(work)) =>
-          self ! Reply(who, WorkOffer(work))
+      repo.available().onComplete {
+        case Success(Some(task)) =>
+          self ! Reply(who, TaskOffer(task))
         case Success(None) =>
         case Failure(t) =>
-          logger.error("Could not load next work available", t)
+          logger.error("Could not get next task available", t)
       }
 
     case Reply(who, offer) =>
-      persist(WorkStarted(who, offer.work.id)) { ws =>
+      persist(TaskStarted(who, offer.task.id)) { ws =>
         retry(3)(ws.who ? offer).acked.onComplete {
           case Success(_) =>
             self ! ws
           case Failure(t) =>
-            logger.error(s"Could not start work ${ws.workId} ${offer.work.seed} for $who", t)
-            self ! WorkFailed(ws.who, ws.workId)
+            logger.error(s"Failed to start task ${ws.taskId} for $who", t)
+            self ! TaskFailed(ws.who, ws.taskId)
         }
       }
 
     case Terminated(who) =>
       logger.info(s"Worker down: $who")
-      persist(WorkerTerminated(who))(noop)
-      works.releaseAll(state.get(who).map(_.workId))
-        .onFailure { case t => logger.error("Could not release all work", t) }
+      persist(WorkerDied(who))(noop)
+      repo.releaseAll(state.get(who).map(_.taskId))
+        .onFailure { case t => logger.error("Could not release worker tasks", t) }
       state = state.cancel(who)
 
     case CleanUp =>
@@ -90,12 +90,12 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       if (!firstClean) saveSnapshot(state)
       journalNumberOnSnapshot = lastSequenceNr
 
-      val toExtend = state.ongoingWork.map { case (who, all) =>
+      val toExtend = state.ongoingTasks.map { case (who, all) =>
         val toPing = all.filter(_.shouldPing || firstClean)
         toPing.foreach { ongoing =>
-          retry(3)(who ? InProgress(ongoing.workId)).acked.onFailure { case t =>
+          retry(3)(who ? IsInProgress(ongoing.taskId)).acked.onFailure { case t =>
             logger.trace(s"$who is down")
-            self ! WorkFailed(who, ongoing.workId)
+            self ! TaskFailed(who, ongoing.taskId)
           }
         }
         who -> toPing
@@ -107,60 +107,75 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
       if (journalNumberOnSnapshot - 1 > 0) deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
-    case fail @ WorkFailed(who, workId) =>
-      logger.info(s"Work $workId failed")
+    case fail @ TaskFailed(who, taskId) =>
+      logger.info(s"Task $taskId failed")
       persist(fail)(noop)
-      state = state.cancel(who, workId)
-      works.release(workId)
-        .onFailure { case t => logger.error(s"Could not release $workId", t) }
+      state = state.cancel(who, taskId)
+      repo.release(taskId)
+        .onFailure { case t => logger.error(s"Could not release $taskId", t) }
 
-    case WorkStarted(who, workId) =>
-      logger.info(s"Work started $workId")
-      state = state.start(who, workId)
+    case TaskStarted(who, taskId) =>
+      logger.info(s"Task $taskId started")
+      state = state.start(who, taskId)
       watch(who)
 
-    case WorkFinished(workId, transfer) =>
-      logger.info(s"Work done $workId")
+    case TaskFinished(taskId, transfer) =>
+      logger.info(s"Task $taskId done")
       val who = sender()
-      works.done(workId, transfer).onComplete {
-        case Success(_) =>
+      repo.done(taskId, transfer).onComplete {
+        case Success(finishedWorkId) =>
+          finishedWorkId.foreach(id => logger.info(s"Finished run on work $id"))
           who ! Ack
-          self ! Done(workId, who)
+          self ! Done(taskId, who)
         case Failure(t) =>
-          logger.error(s"Could not mark $workId done", t)
+          logger.error(s"Could not mark $taskId done", t)
           who ! Nack
       }
 
-    case Done(workId, who) =>
-      persist(WorkDone(who, workId))(noop)
-      state = state.done(who, workId)
+    case Done(taskId, who) =>
+      persist(TaskDone(who, taskId))(noop)
+      state = state.done(who, taskId)
 
     case ConsistencyCheck =>
       //TODO check if any work that was made available is not on the current state
       sender() ! Ack
 
-    case AddSeeds(seeds) =>
+    case AddWork(seeds) =>
       logger.trace("Adding new seeds")
-      val client = sender()
-      works.addAll(seeds).onComplete {
+      val who = sender()
+      repo.addWork(seeds).onComplete {
         case Success(_) =>
-          client ! Ack
-          mediator !  DistributedPubSubMediator.Publish(WorkAvailable.topic, WorkAvailable)
+          who ! Ack
+          announceTasksAvailable()
         case Failure(t) =>
           logger.error("Could not add seeds", t)
       }
 
-    case GetLinks(workId) =>
+    case AddSubTask(taskId, depth, urls) =>
       val who = sender()
-      works.links(workId).onComplete {
+      repo.addTask(taskId, depth, urls).onComplete {
+        case Success(_) =>
+          who ! Ack
+          announceTasksAvailable()
+        case Failure(t) =>
+          logger.error("Could not add sub-task", t)
+          who ! Nack
+      }
+
+    case GetLinks(taskId) =>
+      val who = sender()
+      repo.links(taskId).onComplete {
         case Success(transfer) =>
-          who ! WorkLinks(workId, transfer)
+          who ! WorkLinks(taskId, transfer)
         case Failure(t) =>
           logger.error("Could not retrieve links", t)
           who ! Nack
       }
 
   }
+
+  def announceTasksAvailable(): Unit =
+    mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
 
   override def unhandled(message: Any): Unit = message match {
     case _: DeleteSnapshotsSuccess =>
@@ -172,8 +187,8 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 
   case object CleanUp
-  case class Reply(who: ActorRef, offer: WorkOffer)
-  case class Done(workId: String, who: ActorRef)
+  case class Reply(who: ActorRef, offer: TaskOffer)
+  case class Done(taskId: String, who: ActorRef)
 
 }
 
@@ -199,10 +214,10 @@ object Master {
 
   sealed trait Event
   object Event {
-    case class WorkStarted(who: ActorRef, workId: String) extends Event
-    case class WorkFailed(who: ActorRef, workId: String) extends Event
-    case class WorkerTerminated(who: ActorRef) extends Event
-    case class WorkDone(who: ActorRef, workId: String) extends Event
+    case class TaskStarted(who: ActorRef, taskId: String) extends Event
+    case class TaskFailed(who: ActorRef, taskId: String) extends Event
+    case class TaskDone(who: ActorRef, taskId: String) extends Event
+    case class WorkerDied(who: ActorRef) extends Event
   }
 
 }

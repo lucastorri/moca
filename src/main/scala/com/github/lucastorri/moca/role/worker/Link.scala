@@ -3,20 +3,20 @@ package com.github.lucastorri.moca.role.worker
 import com.github.lucastorri.moca.role.worker.Minion.Event.Found
 import com.github.lucastorri.moca.url.Url
 
-case class OutLink(url: Url, depth: Int) {
+case class Link(url: Url, depth: Int) {
 
   override def hashCode: Int = url.hashCode
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case other: OutLink => other.url == url
+    case other: Link => other.url == url
     case _ => false
   }
 
 }
 
-object OutLink {
+object Link {
 
-  def all(found: Found): Set[OutLink] =
-    found.urls.map(url => OutLink(url, found.depth))
+  def all(found: Found): Set[Link] =
+    found.urls.map(url => Link(url, found.depth))
 
 }

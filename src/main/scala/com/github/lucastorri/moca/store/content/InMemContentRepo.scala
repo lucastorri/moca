@@ -1,36 +1,21 @@
 package com.github.lucastorri.moca.store.content
-
-import com.github.lucastorri.moca.browser.Content
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.url.Url
-
-import scala.collection.mutable
-import scala.concurrent.Future
-
-class InMemContentRepo extends ContentRepo {
-
-  private val open = mutable.HashMap.empty[Work, InMemWorkContentRepo]
-
-  override def apply(work: Work): WorkContentRepo =
-    get(work)
-
-  override def links(work: Work): WorkContentTransfer =
-    InMemWorkContentTransfer(get(work).links.toStream)
-
-  private def get(work: Work): InMemWorkContentRepo =
-    open.getOrElseUpdate(work, new InMemWorkContentRepo)
-
-}
-
-class InMemWorkContentRepo extends WorkContentRepo {
-
-  private[content] val links = mutable.HashSet.empty[ContentLink]
-
-  override def save(url: Url, content: Content): Future[Unit] = {
-    links += ContentLink(url, "/no/url/stored")
-    Future.successful(())
-  }
-
-}
-
-case class InMemWorkContentTransfer(contents: Stream[ContentLink]) extends WorkContentTransfer
+//
+//import com.github.lucastorri.moca.browser.Content
+//import com.github.lucastorri.moca.role.Work
+//import com.github.lucastorri.moca.url.Url
+//
+//import scala.collection.mutable
+//import scala.concurrent.Future
+//
+//class InMemTaskContentRepo extends TaskContentRepo {
+//
+//  private[content] val links = mutable.HashSet.empty[ContentLink]
+//
+//  override def save(url: Url, content: Content): Future[Unit] = {
+//    links += ContentLink(url, "/no/url/stored")
+//    Future.successful(())
+//  }
+//
+//}
+//
+//case class InMemContentLinksTransfer(contents: Stream[ContentLink]) extends ContentLinksTransfer

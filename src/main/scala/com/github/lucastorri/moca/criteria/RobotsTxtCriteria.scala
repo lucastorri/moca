@@ -5,20 +5,20 @@ import java.nio.charset.StandardCharsets
 import java.util.Map.Entry
 
 import com.github.lucastorri.moca.browser.{Browser, RenderedPage}
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.worker.OutLink
+import com.github.lucastorri.moca.role.Task
+import com.github.lucastorri.moca.role.worker.Link
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import crawlercommons.robots.{BaseRobotRules, SimpleRobotRulesParser}
 import org.apache.commons.io.IOUtils
-import scala.collection.JavaConversions._
 
+import scala.collection.JavaConversions._
 import scala.util.Try
 
 case class RobotsTxtCriteria(criteria: LinkSelectionCriteria) extends LinkSelectionCriteria {
 
-  override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] =
-    criteria.select(work, link, page)
+  override def select(task: Task, link: Link, page: RenderedPage): Set[Url] =
+    criteria.select(task, link, page)
       .filter { url => RobotsTxtCriteria.get(url).isAllowed(url.toString) }
 
 }

@@ -1,22 +1,25 @@
 package com.github.lucastorri.moca.store.work
 
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.store.content.WorkContentTransfer
+import com.github.lucastorri.moca.role.{Task, Work}
+import com.github.lucastorri.moca.store.content.ContentLinksTransfer
+import com.github.lucastorri.moca.url.Url
 
 import scala.concurrent.Future
 
 trait WorkRepo {
 
-  def available(): Future[Option[Work]]
+  def available(): Future[Option[Task]]
 
-  def done(workId: String, transfer: WorkContentTransfer): Future[Unit]
+  def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]]
 
-  def release(workId: String): Future[Unit]
+  def release(taskId: String): Future[Unit]
 
-  def releaseAll(workIds: Set[String]): Future[Unit]
+  def releaseAll(taskIds: Set[String]): Future[Unit]
 
-  def addAll(seeds: Set[Work]): Future[Unit]
+  def addWork(added: Set[Work]): Future[Boolean]
+  
+  def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit]
 
-  def links(workId: String): Future[Option[WorkContentTransfer]]
+  def links(workId: String): Future[Option[ContentLinksTransfer]]
 
 }

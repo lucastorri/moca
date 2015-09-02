@@ -5,18 +5,20 @@ import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
 import akka.pattern.ask
 import akka.util.{Timeout => AskTimeout}
 import com.github.lucastorri.moca.async.retry
-import com.github.lucastorri.moca.browser.Browser
+import com.github.lucastorri.moca.browser.BrowserProvider
+import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker._
+import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.typesafe.scalalogging.StrictLogging
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker(repo: ContentRepo) extends Actor with FSM[State, Option[Work]] with StrictLogging {
+class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 10.seconds
@@ -24,66 +26,73 @@ class Worker(repo: ContentRepo) extends Actor with FSM[State, Option[Work]] with
   private val mediator = DistributedPubSub(context.system).mediator
   private val requestWorkInterval = 5.minute
   private val master = Master.proxy()
-  private var currentWork: Work = _
 
   override def preStart(): Unit = {
-    logger.info("worker started")
+    logger.info("Worker started")
     self ! RequestWork
-    mediator ! DistributedPubSubMediator.Subscribe(WorkAvailable.topic, self)
+    mediator ! DistributedPubSubMediator.Subscribe(TasksAvailable.topic, self)
   }
 
-  startWith(State.Idle, Option.empty)
+  startWith(State.Idle, null)
 
   when(State.Idle, stateTimeout = requestWorkInterval) {
 
-    case Event(StateTimeout | RequestWork | WorkAvailable, _) =>
-      master ! WorkRequest
+    case Event(StateTimeout | RequestWork | TasksAvailable, _) =>
+      master ! TaskRequest
       stay()
 
-    case Event(WorkOffer(work), _) =>
+    case Event(TaskOffer(task), _) =>
       sender() ! Ack
-      currentWork = work
-      actorOf(Props(new Minion(work, Browser.instance(), repo(work))))
-      goto(State.Working) using Some(work)
+      actorOf(Props(new Minion(task, browserProvider.instance(), repo(task), partition)))
+      goto(State.Working) using task
 
   }
 
   when(State.Working) {
 
-    case Event(WorkOffer(work), _) =>
-      if (work == currentWork) sender() ! Ack
+    case Event(TaskOffer(task), _) =>
+      if (task == stateData) sender() ! Ack
       stay()
 
-    case Event(Done(work), _) =>
+    case Event(Done, _) =>
       sender() ! PoisonPill
-      val transfer = repo.links(work)
-      retry(3)(master ? WorkFinished(work.id, transfer)).acked().onComplete {
+      val transfer = repo.links(stateData)
+      retry(3)(master ? TaskFinished(stateData.id, transfer)).acked().onComplete {
         case Success(_) =>
           self ! Finished
         case Failure(t) =>
-          logger.error("Could not update master of finished work", t)
+          logger.error("Could not update master of finished task", t)
           self ! Finished
       }
       stay()
 
+    case Event(Partition(urls), _) =>
+      val taskAdd = Future.sequence {
+        urls.groupBy(_.depth).map { case (depth, links) =>
+          retry(3)(master ? AddSubTask(stateData.id, depth, links.map(_.url)))
+        }
+      }
+      taskAdd.onFailure { case t => logger.error("Could not add sub-tasks", t) } //TODO should also fail worker?
+      stay()
+
     case Event(Finished, _) =>
-      goto(State.Idle) using None
+      goto(State.Idle) using null
 
   }
 
   onTransition {
 
     case State.Idle -> State.Working =>
-      logger.info(s"Starting work $nextStateData")
+      logger.info(s"Starting task ${nextStateData.id}")
 
     case State.Working -> State.Idle =>
-      logger.info(s"Work done $stateData")
+      logger.info(s"Task ${stateData.id} done")
       self ! RequestWork
 
   }
 
   override def unhandled(message: Any): Unit = message match {
-    case _: DistributedPubSubMediator.SubscribeAck => logger.trace("Subscribed for new work")
+    case _: DistributedPubSubMediator.SubscribeAck => logger.trace("Subscribed for new tasks")
     case _ => logger.error(s"Unknown message $message")
   }
 
@@ -93,8 +102,8 @@ object Worker {
 
   val role = "worker"
 
-  def start(repo: ContentRepo)(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props(new Worker(repo)), s"worker-$id")
+  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector)(id: Int)(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(new Worker(repo, browserProvider, partition)), s"worker-$id")
   }
 
   sealed trait State
@@ -105,7 +114,8 @@ object Worker {
   }
 
   case object RequestWork
-  case class Done(work: Work)
+  case object Done
   case object Finished
+  case class Partition(urls: Set[Link])
 
 }

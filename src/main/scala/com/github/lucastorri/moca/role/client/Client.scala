@@ -11,7 +11,7 @@ import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Work
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
-import com.github.lucastorri.moca.store.content.WorkContentTransfer
+import com.github.lucastorri.moca.store.content.ContentLinksTransfer
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
@@ -50,7 +50,7 @@ class Client extends Actor with StrictLogging {
         batch.promise.success(())
       } else {
         val next = batch.next
-        retry(3)(master ? AddSeeds(next)).acked.onComplete {
+        retry(3)(master ? AddWork(next)).acked.onComplete {
           case Success(_) =>
             logger.info(s"Added ${batch.processed}/${batch.total} of ${batch.file}")
             self ! batch
@@ -120,7 +120,7 @@ object Client {
   object Command {
     case class AddSeedFile(file: File) extends Command[Unit](_ => "success")
     case class CheckWorkRepoConsistency() extends Command[Unit](_ => "success")
-    case class GetSeedResults(seedId: String) extends Command[WorkContentTransfer](_.contents.mkString("\n", "\n", ""))
+    case class GetSeedResults(seedId: String) extends Command[ContentLinksTransfer](_.contents.mkString("\n", "\n", ""))
   }
 
   case class CommandResult[T](cmd: Command[T], result: Try[T])(str: T => String) {

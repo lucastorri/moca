@@ -55,8 +55,12 @@ class Url private[Url](override val toString: String) extends Serializable {
 
 object Url {
 
-  def apply(url: String): Url = { //TODO drop #blah
-    new Url(test(url).toURI.normalize().toString)
+  def apply(url: String): Url = {
+    val cleaned = url.indexOf('#') match {
+      case -1 => url
+      case n => url.substring(0, n)
+    }
+    new Url(test(cleaned).toURI.normalize().toString)
   }
 
   def parse(url: String): Option[Url] =

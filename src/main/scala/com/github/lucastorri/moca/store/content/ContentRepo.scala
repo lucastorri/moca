@@ -1,21 +1,21 @@
 package com.github.lucastorri.moca.store.content
 
 import com.github.lucastorri.moca.browser.Content
-import com.github.lucastorri.moca.role.Work
+import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.url.Url
 
 import scala.concurrent.Future
 
 trait ContentRepo {
 
-  def apply(work: Work): WorkContentRepo
+  def apply(task: Task): TaskContentRepo
 
-  def links(work: Work): WorkContentTransfer
+  def links(task: Task): ContentLinksTransfer
 
 }
 
-trait WorkContentRepo {
+trait TaskContentRepo {
 
-  def save(url: Url, content: Content): Future[Unit]
+  def save(url: Url, depth: Int, content: Content): Future[Unit]
   
 }

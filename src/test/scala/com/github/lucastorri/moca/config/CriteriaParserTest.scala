@@ -2,8 +2,8 @@ package com.github.lucastorri.moca.config
 
 import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.criteria._
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.worker.OutLink
+import com.github.lucastorri.moca.role.Task
+import com.github.lucastorri.moca.role.worker.Link
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
@@ -52,5 +52,5 @@ class CriteriaParserTest extends FlatSpec with MustMatchers {
 }
 
 class FakeFilter extends FilteredCriteria.Filter {
-  override def apply(v1: Work, v2: OutLink, v3: RenderedPage): (Url) => Boolean = _ => false
+  override def apply(v1: Task, v2: Link, v3: RenderedPage): (Url) => Boolean = _ => false
 }

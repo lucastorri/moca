@@ -4,37 +4,37 @@ import akka.actor.ActorRef
 
 import scala.concurrent.duration.Deadline
 
-case class State(ongoingWork: Map[ActorRef, Set[OngoingWork]]) {
+case class State(ongoingTasks: Map[ActorRef, Set[OngoingTask]]) {
 
-  def start(who: ActorRef, workId: String): State = {
-    val entry = who -> (get(who) + create(workId))
-    copy(ongoingWork = ongoingWork + entry)
+  def start(who: ActorRef, taskId: String): State = {
+    val entry = who -> (get(who) + create(taskId))
+    copy(ongoingTasks = ongoingTasks + entry)
   }
 
-  def cancel(who: ActorRef, workId: String): State = {
-    val workSet = get(who) - create(workId)
+  def cancel(who: ActorRef, taskId: String): State = {
+    val taskSet = get(who) - create(taskId)
     val ongoing =
-      if (workSet.isEmpty) ongoingWork - who
-      else ongoingWork + (who -> workSet)
-    copy(ongoingWork = ongoing)
+      if (taskSet.isEmpty) ongoingTasks - who
+      else ongoingTasks + (who -> taskSet)
+    copy(ongoingTasks = ongoing)
   }
 
   def cancel(who: ActorRef): State =
-    copy(ongoingWork = ongoingWork - who)
+    copy(ongoingTasks = ongoingTasks - who)
 
-  def get(who: ActorRef): Set[OngoingWork] =
-    ongoingWork.getOrElse(who, Set.empty)
+  def get(who: ActorRef): Set[OngoingTask] =
+    ongoingTasks.getOrElse(who, Set.empty)
 
-  def extendDeadline(toExtend: Map[ActorRef, Set[OngoingWork]]): State = {
-    val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.workId)))
-    copy(ongoingWork = ongoingWork ++ updates)
+  def extendDeadline(toExtend: Map[ActorRef, Set[OngoingTask]]): State = {
+    val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.taskId)))
+    copy(ongoingTasks = ongoingTasks ++ updates)
   }
 
-  def done(who: ActorRef, workId: String): State =
-    cancel(who, workId)
+  def done(who: ActorRef, taskId: String): State =
+    cancel(who, taskId)
 
-  private def create(workId: String): OngoingWork =
-    OngoingWork(workId, Deadline.now + Master.pingInterval)
+  private def create(taskId: String): OngoingTask =
+    OngoingTask(taskId, Deadline.now + Master.pingInterval)
 
 }
 
@@ -45,14 +45,14 @@ object State {
 
 }
 
-case class OngoingWork(workId: String, nextPing: Deadline) {
+case class OngoingTask(taskId: String, nextPing: Deadline) {
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case other: OngoingWork => other.workId == workId
+    case other: OngoingTask => other.taskId == taskId
     case _ => false
   }
 
-  override def hashCode: Int = workId.hashCode()
+  override def hashCode: Int = taskId.hashCode()
 
   def shouldPing: Boolean = nextPing.isOverdue()
 

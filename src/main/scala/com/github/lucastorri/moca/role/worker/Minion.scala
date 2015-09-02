@@ -3,11 +3,12 @@ package com.github.lucastorri.moca.role.worker
 import akka.persistence.{PersistentActor, RecoveryCompleted}
 import com.github.lucastorri.moca.async.noop
 import com.github.lucastorri.moca.browser.{Browser, Content}
-import com.github.lucastorri.moca.role.Work
+import com.github.lucastorri.moca.partition.PartitionSelector
+import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.worker.Minion.Event.{Fetched, Found, NotFetched}
 import com.github.lucastorri.moca.role.worker.Minion.{Event, Next}
-import com.github.lucastorri.moca.role.worker.Worker.Done
-import com.github.lucastorri.moca.store.content.WorkContentRepo
+import com.github.lucastorri.moca.role.worker.Worker.{Done, Partition}
+import com.github.lucastorri.moca.store.content.TaskContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -15,15 +16,15 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends PersistentActor with StrictLogging {
+class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: PartitionSelector) extends PersistentActor with StrictLogging {
 
   import context._
 
   private val downloaded = mutable.HashSet.empty[Int]
-  private val outstanding = mutable.LinkedHashSet.empty[OutLink]
+  private val outstanding = mutable.LinkedHashSet.empty[Link]
 
   override def preStart(): Unit = {
-    logger.trace(s"Minion started to work on ${work.id}")
+    logger.trace(s"Minion started to work on ${task.id}")
   }
 
   override def receiveRecover: Receive = {
@@ -43,7 +44,7 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
     }
 
     case RecoveryCompleted =>
-      if (downloaded.isEmpty) self ! Found(0, Set(work.seed))
+      if (downloaded.isEmpty) self ! Found(task.initialDepth, task.seeds)
       self ! Next
 
   }
@@ -57,7 +58,7 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
         val result =
           for {
             (fetched, content) <- fetch(o)
-            _ <- repo.save(o.url, content)
+            _ <- repo.save(o.url, o.depth, content)
           } yield fetched
         result.onComplete {
           case Success(fetched) =>
@@ -88,40 +89,44 @@ class Minion(work: Work, browser: Browser, repo: WorkContentRepo) extends Persis
 
   }
 
-  def fetch(link: OutLink): Future[(Fetched, Content)] = {
+  def fetch(link: Link): Future[(Fetched, Content)] = {
     logger.trace(s"Requesting ${link.url}")
     browser.goTo(link.url) { page =>
       logger.trace(s"Processing ${link.url}")
-      Fetched(link, Found(link.depth + 1, work.select(link, page))) -> page.content
+      Fetched(link, Found(link.depth + 1, task.select(link, page))) -> page.content
     }
   }
 
-  def addToQueue(found: Found): Unit =
-    OutLink.all(found).foreach { o =>
+  def addToQueue(found: Found): Unit = {
+    val (toAdd, toFwd) = Link.all(found).partition(link => partition.same(task, link.url))
+    parent ! Partition(toFwd)
+
+    toAdd.foreach { o =>
       if (!downloaded.contains(o.url.hashCode) && !outstanding.contains(o)) {
         outstanding += o
       }
     }
+  }
 
-  def markFetched(link: OutLink): Unit = {
+  def markFetched(link: Link): Unit = {
     outstanding.remove(link)
     downloaded += link.url.hashCode
   }
 
   def scheduleNext(): Unit = {
-    system.scheduler.scheduleOnce(work.intervalBetweenRequests, self, Next)
+    system.scheduler.scheduleOnce(task.intervalBetweenRequests, self, Next)
   }
 
   def finish(): Unit = {
     deleteMessages(lastSequenceNr)
-    parent ! Done(work)
+    parent ! Done
   }
 
   override def unhandled(message: Any): Unit = message match {
     case _ => logger.error(s"Unknown message $message")
   }
 
-  override val persistenceId: String = s"minion-${work.id}"
+  override val persistenceId: String = s"minion-${task.id}"
   override def journalPluginId: String = system.settings.config.getString("moca.minion.journal-plugin-id")
 
 }
@@ -131,8 +136,8 @@ object Minion {
   sealed trait Event
   object Event {
     case class Found(depth: Int, urls: Set[Url]) extends Event
-    case class Fetched(link: OutLink, found: Found) extends Event
-    case class NotFetched(link: OutLink, error: Throwable) extends Event
+    case class Fetched(link: Link, found: Found) extends Event
+    case class NotFetched(link: Link, error: Throwable) extends Event
   }
 
   case object Next

@@ -1,8 +1,8 @@
 package com.github.lucastorri.moca.criteria
 
 import com.github.lucastorri.moca.browser.RenderedPage
-import com.github.lucastorri.moca.role.Work
-import com.github.lucastorri.moca.role.worker.OutLink
+import com.github.lucastorri.moca.role.{Task, Work}
+import com.github.lucastorri.moca.role.worker.{Link, Link$}
 import com.github.lucastorri.moca.url.Url
 import netscape.javascript.JSObject
 
@@ -12,7 +12,7 @@ trait JavaScriptCriteria extends LinkSelectionCriteria {
 
   def script: String
 
-  override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] = {
+  override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = {
     val obj = page.exec(script).asInstanceOf[JSObject]
     val length = Try(obj.getMember("length").asInstanceOf[Number].intValue).getOrElse(0)
     val url = page.currentUrl

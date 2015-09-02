@@ -70,7 +70,9 @@ case class MocaConfig(
 
   def workRepo: WorkRepo = {
     val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
-    val build = ClassBuilder.fromConfig(repoConfig, classOf[ActorSystem] -> system)
+    val build = ClassBuilder.fromConfig(repoConfig,
+      classOf[ActorSystem] -> system,
+      classOf[PartitionSelector] -> partition)
 
     build()
   }
@@ -82,10 +84,10 @@ case class MocaConfig(
     build()
   }
   
-  def partition: PartitionSelector =
+  lazy val partition: PartitionSelector =
     ClassBuilder(main.getString("moca.partition-selector"))()
 
-  def browserProvider: BrowserProvider =
+  lazy val browserProvider: BrowserProvider =
     ClassBuilder(main.getString("moca.browser-provider"))()
 
 }
