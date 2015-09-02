@@ -55,7 +55,7 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
     result
   }
 
-  private case class DBUnit(persistenceId: String) extends KryoSerialization[Any](system) {
+  private case class DBUnit(persistenceId: String) extends KryoSerialization[SnapshotContainer](system) {
 
     private val db = DBMaker
       .appendFileDB(base.resolve(persistenceId).toFile)
@@ -67,11 +67,11 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
     private val map = db.hashMap[SnapshotMetadata, Array[Byte]]("snapshots")
 
     def add(meta: SnapshotMetadata, snapshot: Any): Unit =
-      map.put(meta, serialize(snapshot))
+      map.put(meta, serialize(SnapshotContainer(snapshot)))
 
     def select(criteria: SnapshotSelectionCriteria): Option[SelectedSnapshot] =
       map.find { case (meta, _) => matches(meta, criteria) }
-        .map { case (meta, snapshot) => SelectedSnapshot(meta, deserialize(snapshot)) }
+        .map { case (meta, data) => SelectedSnapshot(meta, deserialize(data).snapshot) }
 
     def delete(meta: SnapshotMetadata): Unit =
       map.remove(meta)
@@ -93,3 +93,5 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
   }
 
 }
+
+case class SnapshotContainer(snapshot: Any)

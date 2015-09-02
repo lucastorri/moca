@@ -87,7 +87,7 @@ class Master(works: WorkRepo) extends PersistentActor with StrictLogging {
 
     case CleanUp =>
       logger.trace("Clean up")
-      saveSnapshot(state)
+      if (!firstClean) saveSnapshot(state)
       journalNumberOnSnapshot = lastSequenceNr
 
       val toExtend = state.ongoingWork.map { case (who, all) =>
