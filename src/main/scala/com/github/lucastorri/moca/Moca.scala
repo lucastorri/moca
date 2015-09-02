@@ -27,12 +27,8 @@ object Moca extends App with StrictLogging {
   
   if (config.hasRole(Client.role)) {
     Client.run(config.clientCommands).onComplete {
-      case Success(results) =>
-        results.foreach(println)
-        system.terminate()
-      case Failure(t) =>
-        logger.error("Failed to run commands", t)
-        System.exit(1)
+      case Success(results) => results.foreach(println); system.terminate()
+      case Failure(t) => logger.error("Failed to run commands", t); System.exit(1)
     }
   }
 
