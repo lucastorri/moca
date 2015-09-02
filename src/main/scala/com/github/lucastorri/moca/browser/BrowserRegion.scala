@@ -19,7 +19,7 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
 
 class BrowserRegion private[browser](settings: BrowserSettings) extends Region with StrictLogging {
@@ -67,8 +67,12 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
     override def currentUrl: Url =
       Url.parse(webEngine.getLocation).getOrElse(originalUrl)
 
-    override def exec(javascript: String): AnyRef =
-      webEngine.executeScript(javascript)
+    override def exec(javascript: String): AnyRef = {
+      val promise = Promise[AnyRef]()
+      Platform.runLater(runnable(promise.success(webEngine.executeScript(javascript))))
+      try Await.result(promise.future, settings.loadTimeout)
+      catch { case e: Exception => e }
+    }
 
     override def content: Content = {
       val buffer = settings.charset.newEncoder().encode(CharBuffer.wrap(html))

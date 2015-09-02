@@ -102,7 +102,6 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
 
 }
 
-//TODO is it still needed?
 case class CustomPersistentRepr(
   payload: Any,
   manifest: String,
