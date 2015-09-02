@@ -4,6 +4,7 @@ import java.io.File
 
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.config.MocaConfig._
+import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
@@ -79,6 +80,9 @@ case class MocaConfig(
 
     build()
   }
+  
+  def partition: PartitionSelector =
+    ClassBuilder(main.getString("moca.partition-selector"))()
 
 }
 
