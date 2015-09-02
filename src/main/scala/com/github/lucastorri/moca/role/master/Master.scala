@@ -179,6 +179,7 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
   override def unhandled(message: Any): Unit = message match {
     case _: DeleteSnapshotsSuccess =>
+    case _: DeleteMessagesSuccess =>
     case _ => logger.error(s"Unknown message $message")
   }
     

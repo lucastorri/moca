@@ -20,23 +20,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   private val results = mutable.HashMap.empty[String, mutable.ListBuffer[AllContentLinksTransfer]]
 
   override def available(): Future[Option[Task]] = {
-    Future.successful(taskFromAvailableTasks.orElse(taskFromAvailableWork))
-  }
-
-  private def taskFromAvailableTasks: Option[Task] = {
-    runs.find { case (_, run) => run.hasWork }.map { case (id, run) =>
-      run.nextTask()
-    }
-  }
-
-  private def taskFromAvailableWork: Option[Task] = {
-    workAdded.headOption.map { case (id, work) =>
-      workAdded.remove(id)
-      workInProgress.put(id, work)
-      val run = new Run(work)
-      runs.put(run.id, run)
-      run.nextTask()
-    }
+    Future.successful(fromOpenTasks.orElse(fromAvailableWork))
   }
 
   override def links(workId: String): Future[Option[ContentLinksTransfer]] = {
@@ -87,8 +71,8 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   private class Run(val work: Work) {
 
     val id = Random.alphanumeric.take(16).mkString
-    val open = mutable.HashMap.empty[String, Task]
-    val inProgress = mutable.HashMap.empty[String, Task]
+    val open = mutable.HashSet.empty[String]
+    val inProgress = mutable.HashSet.empty[String]
     val depths = mutable.HashMap.empty[Url, Int]
     val links = mutable.ListBuffer.empty[ContentLink]
 
@@ -101,24 +85,26 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
         .filter { case (_, group) => group.nonEmpty }
         .foreach { case (part, group) =>
           val taskId = s"$id::${Random.alphanumeric.take(8).mkString}"
-          open.put(taskId, Task(taskId, group, work.criteria, depth, part))
+          val task = Task(taskId, group, work.criteria, depth, part)
+          open.add(taskId)
+          Run.allTasks.append(task)
           logger.debug(s"New task $taskId for work ${work.id}")
         }
     }
 
-    def nextTask(): Task = {
-      val (taskId, task) = open.head
+    def get(taskId: String): Unit = {
       open.remove(taskId)
-      inProgress.put(taskId, task)
-      task
+      inProgress.add(taskId)
     }
 
     def release(taskId: String): Unit = {
-      inProgress.remove(taskId).foreach(task => open.put(taskId, task))
+      inProgress.remove(taskId)
+      open.add(taskId)
     }
 
     def complete(taskId: String, transfer: ContentLinksTransfer): Unit = {
       inProgress.remove(taskId)
+      Run.release(taskId)
       transfer.contents.foreach { content =>
         val existingDepthIsSmaller = depths.get(content.url).exists(_ < content.depth)
         if (!existingDepthIsSmaller) depths(content.url) = content.depth
@@ -136,6 +122,44 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
       open.nonEmpty
 
   }
+
+  object Run {
+
+    //TODO create a TaskScheduler to do this work
+    private[Run] val allTasks = mutable.ListBuffer.empty[Task]
+    private[Run] val lockedPartitions = mutable.HashSet.empty[String]
+    private[Run] val taskPartition = mutable.HashMap.empty[String, String]
+
+    def next(): Option[Task] = {
+      allTasks.indexWhere(task => !lockedPartitions.contains(task.partition)) match {
+        case -1 => None
+        case n =>
+          val task = allTasks.remove(n)
+          lockedPartitions.add(task.partition)
+          taskPartition.put(task.id, task.partition)
+          Some(task)
+      }
+    }
+
+    def release(taskId: String): Unit = {
+      lockedPartitions.remove(taskPartition(taskId))
+    }
+
+  }
+
+  private def fromOpenTasks: Option[Task] =
+    Run.next()
+
+  private def fromAvailableWork: Option[Task] = {
+    workAdded.headOption.flatMap { case (id, work) =>
+      workAdded.remove(id)
+      workInProgress.put(id, work)
+      val run = new Run(work)
+      runs.put(run.id, run)
+      Run.next()
+    }
+  }
+
 
 }
 
