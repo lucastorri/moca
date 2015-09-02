@@ -3,6 +3,9 @@
     <property name="pattern" value="%date{HH:mm:ss} %-5level %logger{0}.%method - %msg%n" />
 
 
+    <logger name="crawlercommons" level="INFO" />
+
+
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${pattern}</pattern>
