@@ -30,7 +30,7 @@ object RobotsTxtCriteria extends StrictLogging {
   private[RobotsTxtCriteria] val cache = LRUCache[String, BaseRobotRules](1024)
 
   private[RobotsTxtCriteria] def get(url: Url): BaseRobotRules =
-    cache.getOrElseUpdate(url.host, fetch(url))
+    cache.getOrElseUpdate(url.root.toString, fetch(url))
 
   private def fetch(url: Url): BaseRobotRules = {
     val robots = url.resolve("/robots.txt").toURL
