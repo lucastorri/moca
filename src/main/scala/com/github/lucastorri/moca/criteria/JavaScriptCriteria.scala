@@ -15,7 +15,8 @@ trait JavaScriptCriteria extends LinkSelectionCriteria {
   override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] = {
     val obj = page.exec(script).asInstanceOf[JSObject]
     val length = Try(obj.getMember("length").asInstanceOf[Number].intValue).getOrElse(0)
-    (0 until length).flatMap(i => Try(Url(obj.getSlot(i).toString)).toOption).toSet
+    val url = page.currentUrl
+    (0 until length).flatMap(i => Try(url.resolve(obj.getSlot(i).toString)).toOption).toSet
   }
 
 }
