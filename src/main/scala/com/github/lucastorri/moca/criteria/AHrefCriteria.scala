@@ -13,6 +13,8 @@ trait AHrefCriteria extends LinkSelectionCriteria {
   def url(page: RenderedPage): Url =
     page.currentUrl
 
+  //TODO replace jsoup with a piece of javascript:
+  // Array.prototype.slice.call(document.getElementsByTagName('a')).map(function(e) { return e.href; });
   override def select(work: Work, link: OutLink, page: RenderedPage): Set[Url] =
      Jsoup.parse(page.html, url(page).toString)
        .select("a")
