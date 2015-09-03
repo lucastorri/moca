@@ -171,8 +171,6 @@ object RunJournal {
 
 case class Run(id: String, work: Work, directory: File, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
 
-  directory.mkdirs()
-
   private val db = DBMaker
     .appendFileDB(directory)
     .closeOnJvmShutdown()
