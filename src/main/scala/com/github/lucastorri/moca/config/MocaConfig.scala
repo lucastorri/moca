@@ -1,9 +1,10 @@
 package com.github.lucastorri.moca.config
 
 import java.io.File
+import java.nio.charset.Charset
 
 import akka.actor.ActorSystem
-import com.github.lucastorri.moca.browser.BrowserProvider
+import com.github.lucastorri.moca.browser.{BrowserProvider, BrowserSettings}
 import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
@@ -13,6 +14,9 @@ import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.Duration
 
 case class MocaConfig(
   systemName: String = "MocaSystem",
@@ -84,11 +88,30 @@ case class MocaConfig(
     build()
   }
   
-  lazy val partition: PartitionSelector =
-    ClassBuilder(main.getString("moca.partition-selector"))()
+  lazy val partition: PartitionSelector = {
+    val partitionConfig = main.getConfig(main.getString("moca.partition-selector-id"))
+    val build = ClassBuilder.fromConfig(partitionConfig)
 
-  lazy val browserProvider: BrowserProvider =
-    ClassBuilder(main.getString("moca.browser-provider"))()
+    build()
+  }
+
+  lazy val browserProvider: BrowserProvider = {
+    val providerConfig = main.getConfig(main.getString("moca.browser-provider-id"))
+    val build = ClassBuilder.fromConfig(providerConfig,
+      classOf[ActorSystem] -> system,
+      classOf[ExecutionContext] -> system.dispatcher,
+      classOf[BrowserSettings] -> browserSettings)
+
+    build()
+  }
+
+  lazy val browserSettings: BrowserSettings = {
+    val baseConfig = main.getConfig("browser")
+    BrowserSettings(
+      Charset.forName(baseConfig.getString("html-charset")),
+      Duration.fromNanos(baseConfig.getDuration("load-timeout").toNanos),
+      baseConfig.getString("user-agent"))
+  }
 
 }
 

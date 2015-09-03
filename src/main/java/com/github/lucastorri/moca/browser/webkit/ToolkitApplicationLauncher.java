@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.browser;
+package com.github.lucastorri.moca.browser.webkit;
 
 import javafx.application.Application;
 

@@ -4,7 +4,7 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.util.Map.Entry
 
-import com.github.lucastorri.moca.browser.{Browser, RenderedPage}
+import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.worker.Link
 import com.github.lucastorri.moca.url.Url
@@ -19,7 +19,7 @@ case class RobotsTxtCriteria(criteria: LinkSelectionCriteria) extends LinkSelect
 
   override def select(task: Task, link: Link, page: RenderedPage): Set[Url] =
     criteria.select(task, link, page)
-      .filter { url => RobotsTxtCriteria.get(url).isAllowed(url.toString) }
+      .filter { url => RobotsTxtCriteria.get(url, page.settings.userAgent).isAllowed(url.toString) }
 
 }
 
@@ -27,12 +27,12 @@ object RobotsTxtCriteria extends StrictLogging {
 
   val defaultCacheSize = 1024
 
-  private[RobotsTxtCriteria] val cache = LRUCache[String, BaseRobotRules](1024)
+  private[RobotsTxtCriteria] val cache = LRUCache[String, BaseRobotRules](defaultCacheSize)
 
-  private[RobotsTxtCriteria] def get(url: Url): BaseRobotRules =
-    cache.getOrElseUpdate(url.root.toString, fetch(url))
+  private[RobotsTxtCriteria] def get(url: Url, userAgent: String): BaseRobotRules =
+    cache.getOrElseUpdate(url.root.toString, fetch(url, userAgent))
 
-  private def fetch(url: Url): BaseRobotRules = {
+  private def fetch(url: Url, userAgent: String): BaseRobotRules = {
     val robots = url.resolve("/robots.txt").toURL
     var in: InputStream = null
     val content =
@@ -48,7 +48,7 @@ object RobotsTxtCriteria extends StrictLogging {
       }
 
     new SimpleRobotRulesParser().parseContent(robots.toString,
-      content.getBytes(StandardCharsets.UTF_8), "text/plain", Browser.defaultSettings.userAgent)
+      content.getBytes(StandardCharsets.UTF_8), "text/plain", userAgent)
   }
 
   case class LRUCache[K, V](maxSize: Int) extends java.util.LinkedHashMap[K, V](16, 0.75f, true) {

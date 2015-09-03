@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.browser
+package com.github.lucastorri.moca.browser.webkit
 
 import java.io.StringWriter
 import java.net.{Proxy, URL, URLConnection, URLStreamHandler, URLStreamHandlerFactory}
@@ -15,6 +15,7 @@ import javax.xml.transform.stream.StreamResult
 import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
+import com.github.lucastorri.moca.browser.{BrowserSettings, Content, RenderedPage}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -22,7 +23,7 @@ import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
 
-class BrowserRegion private[browser](settings: BrowserSettings) extends Region with StrictLogging {
+class BrowserRegion private[browser](settings: WebKitSettings) extends Region with StrictLogging {
 
   val id = Random.alphanumeric.take(32).mkString
   private val browser = new WebView
@@ -32,7 +33,7 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
 
   logger.trace(s"Region $id starting")
   getChildren.add(browser)
-  webEngine.setUserAgent(settings.userAgent)
+  webEngine.setUserAgent(settings.base.userAgent)
   webEngine.setJavaScriptEnabled(settings.enableJavaScript)
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
@@ -89,6 +90,9 @@ class BrowserRegion private[browser](settings: BrowserSettings) extends Region w
       writer.toString
     }
 
+    override def settings: BrowserSettings =
+      BrowserRegion.this.settings.base
+
   }
 
 }
@@ -114,7 +118,7 @@ object BrowserRegion extends StrictLogging {
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
     val promise = Promise[BrowserRegion]()
     if (pool.isEmpty) {
-      main.future.foreach(_.newWindow(Browser.defaultSettings))
+      main.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
       awaiting += promise
     } else {
       val region = pool.head

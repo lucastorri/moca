@@ -14,4 +14,6 @@ trait RenderedPage {
 
   def exec(javascript: String): AnyRef
 
+  def settings: BrowserSettings
+
 }

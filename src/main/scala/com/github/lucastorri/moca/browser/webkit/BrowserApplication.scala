@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.browser
+package com.github.lucastorri.moca.browser.webkit
 
 import javafx.application.{Application, Platform}
 import javafx.scene.Scene
@@ -11,7 +11,7 @@ class BrowserApplication extends Application {
   override def start(stage: Stage): Unit =
     BrowserRegion.register(this)
 
-  def newWindow(settings: BrowserSettings): Unit = {
+  def newWindow(settings: WebKitSettings): Unit = {
     Platform.runLater(runnable {
       val browser = new BrowserRegion(settings)
       val scene = new Scene(browser, settings.width, settings.height)
