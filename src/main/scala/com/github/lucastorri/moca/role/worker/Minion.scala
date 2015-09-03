@@ -1,7 +1,6 @@
 package com.github.lucastorri.moca.role.worker
 
 import akka.persistence.{PersistentActor, RecoveryCompleted}
-import com.github.lucastorri.moca.async.noop
 import com.github.lucastorri.moca.browser.{Browser, Content}
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Task
@@ -22,7 +21,6 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   private val downloaded = mutable.HashSet.empty[Int]
   private val outstanding = mutable.LinkedHashSet.empty[Link]
-  private val recovering = true
 
   override def preStart(): Unit = {
     logger.trace(s"Minion started to work on ${task.id}")
@@ -69,7 +67,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         }
       }
 
-    case e: Event => e match {
+    case e: Event => persist(e) {
 
       case found: Found =>
         addToQueue(found)
@@ -86,7 +84,6 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         scheduleNext()
 
       }
-      persist(e)(noop)
 
   }
 

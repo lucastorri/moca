@@ -49,6 +49,4 @@ package object async {
     promise.future
   }
 
-  def noop[E](e: E): Unit = {}
-
 }

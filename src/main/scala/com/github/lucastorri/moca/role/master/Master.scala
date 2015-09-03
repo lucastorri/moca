@@ -6,7 +6,7 @@ import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerS
 import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
-import com.github.lucastorri.moca.async.{noop, retry}
+import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.master.Master.Event
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
@@ -89,15 +89,16 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
     case Terminated(who) =>
       logger.info(s"Worker down: $who")
-      persist(WorkerDied(who))(noop)
-      val taskIds = state.get(who).map(_.taskId)
-      repo.releaseAll(taskIds).onComplete {
-        case Success(_) =>
-          scheduler.release(taskIds.toSeq: _*)
-        case Failure(t) =>
-          logger.error("Could not release worker tasks", t)
+      persist(WorkerDied(who)) { _ =>
+        val taskIds = state.get(who).map(_.taskId)
+        repo.releaseAll(taskIds).onComplete {
+          case Success(_) =>
+            scheduler.release(taskIds.toSeq: _*)
+          case Failure(t) =>
+            logger.error("Could not release worker tasks", t)
+        }
+        state = state.cancel(who)
       }
-      state = state.cancel(who)
 
     case CleanUp =>
       logger.trace("Clean up")
@@ -123,13 +124,14 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
     case fail @ TaskFailed(who, taskId) =>
       logger.info(s"Task $taskId failed")
-      persist(fail)(noop)
-      state = state.cancel(who, taskId)
-      repo.release(taskId).onComplete {
-        case Success(_) =>
-          scheduler.release(taskId)
-        case Failure(t) =>
-          logger.error(s"Could not release $taskId", t)
+      persist(fail) { _ =>
+        state = state.cancel(who, taskId)
+        repo.release(taskId).onComplete {
+          case Success(_) =>
+            scheduler.release(taskId)
+          case Failure(t) =>
+            logger.error(s"Could not release $taskId", t)
+        }
       }
 
     case TaskStarted(who, taskId) =>
@@ -152,8 +154,9 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
       }
 
     case Done(taskId, who) =>
-      persist(TaskDone(who, taskId))(noop)
-      state = state.done(who, taskId)
+      persist(TaskDone(who, taskId)) { _ =>
+        state = state.done(who, taskId)
+      }
 
     case ConsistencyCheck =>
       //TODO check if any work that was made available is not on the current state
