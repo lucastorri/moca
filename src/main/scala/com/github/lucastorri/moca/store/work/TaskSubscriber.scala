@@ -2,8 +2,10 @@ package com.github.lucastorri.moca.store.work
 
 import com.github.lucastorri.moca.role.Task
 
-trait TasksSubscriber {
+import scala.concurrent.Future
 
-  def newTask(task: Task): Unit
+trait TaskSubscriber {
+
+  def add(task: Task): Future[Unit]
 
 }

@@ -17,7 +17,7 @@ object Moca extends App with StrictLogging {
   logger.info("Moca starting")
 
   if (config.hasRole(Master.role)) {
-    Master.standBy(config.workRepo)
+    Master.standBy(config.workRepo, config.scheduler)
   }
 
   if (config.hasRole(Worker.role)) {

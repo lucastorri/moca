@@ -22,6 +22,6 @@ trait WorkRepo {
   def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit]
 
 
-  def subscribe(subscriber: TasksSubscriber): TasksSubscription
+  def close(): Unit
 
 }

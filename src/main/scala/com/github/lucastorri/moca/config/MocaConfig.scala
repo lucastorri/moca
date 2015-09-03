@@ -12,6 +12,7 @@ import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, Check
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.content.ContentRepo
+import com.github.lucastorri.moca.store.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -76,7 +77,8 @@ case class MocaConfig(
     val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
     val build = ClassBuilder.fromConfig(repoConfig,
       classOf[ActorSystem] -> system,
-      classOf[PartitionSelector] -> partition)
+      classOf[PartitionSelector] -> partition,
+      classOf[TaskScheduler] -> scheduler)
 
     build()
   }
@@ -111,6 +113,14 @@ case class MocaConfig(
       Charset.forName(baseConfig.getString("html-charset")),
       Duration.fromNanos(baseConfig.getDuration("load-timeout").toNanos),
       baseConfig.getString("user-agent"))
+  }
+
+  lazy val scheduler: TaskScheduler = {
+    val providerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
+    val build = ClassBuilder.fromConfig(providerConfig,
+      classOf[ActorSystem] -> system)
+
+    build()
   }
 
   //TODO consider an injection library

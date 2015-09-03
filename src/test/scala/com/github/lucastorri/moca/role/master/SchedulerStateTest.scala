@@ -1,7 +1,8 @@
 package com.github.lucastorri.moca.role.master
 
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.SchedulerActor.State
+import com.github.lucastorri.moca.store.scheduler.SchedulerActor
+import SchedulerActor.State
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{MustMatchers, FlatSpec}
 

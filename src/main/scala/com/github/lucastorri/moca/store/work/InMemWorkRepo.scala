@@ -3,6 +3,7 @@ package com.github.lucastorri.moca.store.work
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
+import com.github.lucastorri.moca.store.scheduler.TaskScheduler
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -10,29 +11,17 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Random
 
-class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLogging {
+class InMemWorkRepo(partition: PartitionSelector, scheduler: TaskScheduler) extends WorkRepo with StrictLogging {
 
   private val works = mutable.HashMap.empty[String, Work]
   private val results = mutable.HashMap.empty[String, mutable.ListBuffer[AllContentLinksTransfer]]
 
-  private val toPublish = mutable.ListBuffer.empty[Task]
-
-  type TaskHandler = Task => Unit
-
-  private var handleNewTask: TaskHandler = publishToQueue
-
-  private def publishToQueue: TaskHandler = task => toPublish.append(task)
-  private def publishToSubscriber(subscriber: TasksSubscriber): TaskHandler = { task =>
-    toPublish.foreach(subscriber.newTask)
-    toPublish.clear()
-    subscriber.newTask(task)
-  }
 
   override def addWork(added: Set[Work]): Future[Boolean] = {
     val isNew = added.filterNot(work => works.contains(work.id))
     isNew.foreach { work =>
       works.put(work.id, work)
-      Run.createFor(work).initialTasks.foreach(handleNewTask)
+      Run.createFor(work).initialTasks.foreach(scheduler.add)
     }
     Future.successful(isNew.nonEmpty)
   }
@@ -42,12 +31,12 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   }
 
   override def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit] = {
-    Run.forId(parentTaskId).newTasks(links, linksDepth).foreach(handleNewTask)
+    Run.forId(parentTaskId).newTasks(links, linksDepth).foreach(scheduler.add)
     Future.successful(())
   }
 
   override def release(taskId: String): Future[Unit] = {
-    Run.forId(taskId).release(taskId).foreach(handleNewTask)
+    Run.forId(taskId).release(taskId).foreach(scheduler.add)
     Future.successful(())
   }
 
@@ -140,12 +129,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
 
   }
 
-  override def subscribe(subscriber: TasksSubscriber): TasksSubscription = {
-    handleNewTask = publishToSubscriber(subscriber)
-    new TasksSubscription {
-      override def unsubscribe(): Unit = handleNewTask = publishToQueue
-    }
-  }
+  override def close(): Unit = {}
 
 }
 

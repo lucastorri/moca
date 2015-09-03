@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.store.work
 
-trait TasksSubscription {
+trait TaskSubscription {
   
   def unsubscribe(): Unit
 

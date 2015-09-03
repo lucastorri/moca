@@ -10,20 +10,19 @@ import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
 import com.github.lucastorri.moca.role.master.Master.{Event, State}
+import com.github.lucastorri.moca.store.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
+class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
 
   private val mediator = DistributedPubSub(context.system).mediator
-  private val scheduler = Scheduler(context)
-  private val subscription = repo.subscribe(scheduler.asSubscriber)
 
   private var state = State.initial()
   private var journalNumberOnSnapshot = 0L
@@ -36,7 +35,8 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
   override def postStop(): Unit = {
     logger.info("Master going down")
-    subscription.unsubscribe()
+    repo.close()
+    scheduler.close()
     super.postStop()
   }
 
@@ -229,9 +229,9 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(work: WorkRepo)(implicit system: ActorSystem): Unit = {
+  def standBy(work: => WorkRepo, scheduler: => TaskScheduler)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
-    val manager = ClusterSingletonManager.props(Props(new Master(work)), PoisonPill, settings)
+    val manager = ClusterSingletonManager.props(Props(new Master(work, scheduler)), PoisonPill, settings)
     system.actorOf(manager, name)
   }
 

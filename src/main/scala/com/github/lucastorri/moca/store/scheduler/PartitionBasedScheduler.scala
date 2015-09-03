@@ -1,23 +1,22 @@
-package com.github.lucastorri.moca.role.master
+package com.github.lucastorri.moca.store.scheduler
 
-import akka.actor.{ActorRefFactory, Props, Status}
+import akka.actor.{ActorSystem, Props, Status}
 import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.Scheduler.Event
-import com.github.lucastorri.moca.role.master.Scheduler.Event._
-import com.github.lucastorri.moca.role.master.SchedulerActor.{State, TakeSnapshot}
-import com.github.lucastorri.moca.store.work.TasksSubscriber
+import com.github.lucastorri.moca.store.scheduler.PartitionBasedScheduler.Event._
+import com.github.lucastorri.moca.store.scheduler.PartitionBasedScheduler._
+import com.github.lucastorri.moca.store.scheduler.SchedulerActor.{State, TakeSnapshot}
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-case class Scheduler(actorFactory: ActorRefFactory) {
+class PartitionBasedScheduler(system: ActorSystem) extends TaskScheduler {
 
   private implicit val timeout: Timeout = 15.seconds
-  private val scheduler = actorFactory.actorOf(Props[SchedulerActor])
+  private val scheduler = system.actorOf(Props[SchedulerActor])
 
   def add(task: Task): Future[Unit] =
     (scheduler ? Add(task)).mapTo[Unit]
@@ -28,13 +27,13 @@ case class Scheduler(actorFactory: ActorRefFactory) {
   def release(taskIds: String*): Future[Unit] =
     (scheduler ? Release(taskIds: _*)).mapTo[Unit]
 
-  def asSubscriber: TasksSubscriber = new TasksSubscriber {
-    override def newTask(task: Task): Unit = add(task)
-  }
-
+  def close(): Unit = {
+    system.stop(scheduler)
+  } 
+  
 }
 
-object Scheduler {
+object PartitionBasedScheduler {
 
   sealed trait Event
   object Event {
@@ -148,16 +147,13 @@ object SchedulerActor {
         val partition = partitions(taskId)
         queues.get(partition) match {
           case Some(queue) =>
-            // scheduled.append(queue.remove(0))
             scheduledCopy :+= queue.head
             val queueCopy = queue.tail
 
-            // if (queue.isEmpty) partitionQueues.remove(partition)
             queuesCopy =
               if (queueCopy.isEmpty) queuesCopy - partition
               else queuesCopy + (partition -> queueCopy)
           case None =>
-            // lockedPartitions.remove(partition)
             lockedCopy -= partition
         }
 
