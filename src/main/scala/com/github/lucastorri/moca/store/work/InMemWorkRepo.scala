@@ -67,7 +67,6 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
     runs(parts.head)
   }
 
-  //TODO add method where minions can get seen urls for (taskId, partition), thus avoiding crawling a same url twice
   private class Run(val work: Work) {
 
     val id = Random.alphanumeric.take(16).mkString
