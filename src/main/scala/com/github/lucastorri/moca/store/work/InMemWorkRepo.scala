@@ -10,7 +10,6 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.util.Random
 
-//TODO it can end running two workers on the same host
 class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLogging {
 
   private val workAdded = mutable.HashMap.empty[String, Work]
@@ -67,7 +66,8 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
     val parts = taskId.split("::")
     runs(parts.head)
   }
-  
+
+  //TODO add method where minions can get seen urls for (taskId, partition), thus avoiding crawling a same url twice
   private class Run(val work: Work) {
 
     val id = Random.alphanumeric.take(16).mkString
@@ -86,6 +86,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
         .foreach { case (part, group) =>
           val taskId = s"$id::${Random.alphanumeric.take(8).mkString}"
           val task = Task(taskId, group, work.criteria, depth, part)
+          group.foreach(url => addDepth(url, depth))
           open.add(taskId)
           Run.allTasks.append(task)
           logger.debug(s"New task $taskId for work ${work.id}")
@@ -106,10 +107,14 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
       inProgress.remove(taskId)
       Run.release(taskId)
       transfer.contents.foreach { content =>
-        val existingDepthIsSmaller = depths.get(content.url).exists(_ < content.depth)
-        if (!existingDepthIsSmaller) depths(content.url) = content.depth
+        addDepth(content.url, content.depth)
         links.append(content)
       }
+    }
+
+    private def addDepth(url: Url, depth: Int): Unit = {
+      val existingDepthIsSmaller = depths.get(url).exists(_ < depth)
+      if (!existingDepthIsSmaller) depths(url) = depth
     }
 
     def all: AllContentLinksTransfer =
