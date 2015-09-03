@@ -5,7 +5,6 @@ import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.store.scheduler.PartitionBasedScheduler.Event._
 import com.github.lucastorri.moca.store.scheduler.PartitionBasedScheduler._
 import com.github.lucastorri.moca.store.scheduler.SchedulerActor.{State, TakeSnapshot}
 import com.typesafe.scalalogging.StrictLogging
@@ -36,11 +35,9 @@ class PartitionBasedScheduler(system: ActorSystem) extends TaskScheduler {
 object PartitionBasedScheduler {
 
   sealed trait Event
-  object Event {
-    case class Add(task: Task) extends Event
-    case object Next extends Event
-    case class Release(taskIds: String*) extends Event
-  }
+  case class Add(task: Task) extends Event
+  case object Next extends Event
+  case class Release(taskIds: String*) extends Event
 
 }
 
