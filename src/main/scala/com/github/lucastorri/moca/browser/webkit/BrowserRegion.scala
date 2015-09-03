@@ -99,6 +99,7 @@ class BrowserRegion private[browser](settings: WebKitSettings) extends Region wi
 
 object BrowserRegion extends StrictLogging {
 
+  //TODO clear windows that aren't being used for a while
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
   private val main = Promise[BrowserApplication]()

@@ -113,6 +113,8 @@ case class MocaConfig(
       baseConfig.getString("user-agent"))
   }
 
+  //TODO consider an injection library
+
 }
 
 object MocaConfig {

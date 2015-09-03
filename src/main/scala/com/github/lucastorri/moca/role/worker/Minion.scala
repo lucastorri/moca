@@ -75,7 +75,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         addToQueue(found)
 
       case fetched @ Fetched(url, found) =>
-        logger.trace(s"Fetched $url")
+        logger.debug(s"Fetched $url")
         markFetched(url)
         addToQueue(found)
         scheduleNext()

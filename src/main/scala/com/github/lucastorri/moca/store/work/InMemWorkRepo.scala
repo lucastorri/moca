@@ -12,14 +12,29 @@ import scala.util.Random
 
 class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLogging {
 
-  private val workAdded = mutable.HashMap.empty[String, Work]
-  private val workInProgress = mutable.HashMap.empty[String, Work]
-  private val workDone = mutable.HashSet.empty[Work]
-  private val runs = mutable.HashMap.empty[String, Run]
+  private val works = mutable.HashMap.empty[String, Work]
   private val results = mutable.HashMap.empty[String, mutable.ListBuffer[AllContentLinksTransfer]]
 
-  override def available(): Future[Option[Task]] = {
-    Future.successful(fromOpenTasks.orElse(fromAvailableWork))
+  private val toPublish = mutable.ListBuffer.empty[Task]
+
+  type TaskHandler = Task => Unit
+
+  private var handleNewTask: TaskHandler = publishToQueue
+
+  private def publishToQueue: TaskHandler = task => toPublish.append(task)
+  private def publishToSubscriber(subscriber: TasksSubscriber): TaskHandler = { task =>
+    toPublish.foreach(subscriber.newTask)
+    toPublish.clear()
+    subscriber.newTask(task)
+  }
+
+  override def addWork(added: Set[Work]): Future[Boolean] = {
+    val isNew = added.filterNot(work => works.contains(work.id))
+    isNew.foreach { work =>
+      works.put(work.id, work)
+      Run.createFor(work).initialTasks.foreach(handleNewTask)
+    }
+    Future.successful(isNew.nonEmpty)
   }
 
   override def links(workId: String): Future[Option[ContentLinksTransfer]] = {
@@ -27,7 +42,12 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   }
 
   override def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit] = {
-    run(parentTaskId).newTasks(links, linksDepth)
+    Run.forId(parentTaskId).newTasks(links, linksDepth).foreach(handleNewTask)
+    Future.successful(())
+  }
+
+  override def release(taskId: String): Future[Unit] = {
+    Run.forId(taskId).release(taskId).foreach(handleNewTask)
     Future.successful(())
   }
 
@@ -37,130 +57,95 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   }
 
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = {
-    val r = run(taskId)
+    val r = Run.forId(taskId)
     r.complete(taskId, transfer)
 
     if (r.isDone) {
-      runs.remove(r.id)
-      workInProgress.remove(r.work.id)
-      workDone.add(r.work)
-      results.getOrElseUpdate(r.work.id, mutable.ListBuffer.empty).append(r.all)
+      results.getOrElseUpdate(r.work.id, mutable.ListBuffer.empty).append(r.transfers)
+      r.close()
     }
 
     Future.successful(if (r.isDone) Some(r.work.id) else None)
   }
 
-  override def addWork(added: Set[Work]): Future[Boolean] = {
-    val isNew = added.filter(work => !workInProgress.contains(work.id))
-    isNew.foreach(work => workAdded.put(work.id, work))
-    Future.successful(isNew.nonEmpty)
-  }
 
-  override def release(taskId: String): Future[Unit] = {
-    run(taskId).release(taskId)
-    Future.successful(())
-  }
-
-
-  private def run(taskId: String): Run = {
-    val parts = taskId.split("::")
-    runs(parts.head)
-  }
-
-  private class Run(val work: Work) {
+  private class Run private[Run](val work: Work) {
 
     val id = Random.alphanumeric.take(16).mkString
-    val open = mutable.HashMap.empty[String, Task]
-    val inProgress = mutable.HashSet.empty[String]
+    val tasks = mutable.HashMap.empty[String, Task]
     val depths = mutable.HashMap.empty[Url, Int]
     val links = mutable.ListBuffer.empty[ContentLink]
 
     logger.debug(s"New run for work ${work.id} ${work.seed} with task root id $id")
-    newTasks(Set(work.seed), 0)
 
-    def newTasks(urls: Set[Url], depth: Int): Unit = {
+    def initialTasks: Set[Task] =
+      newTasks(Set(work.seed), 0)
+
+    def newTasks(urls: Set[Url], depth: Int): Set[Task] = {
       urls.groupBy(partition.apply)
         .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue)))
         .filter { case (_, group) => group.nonEmpty }
-        .foreach { case (part, group) =>
+        .map { case (part, group) =>
           val taskId = s"$id::${Random.alphanumeric.take(8).mkString}"
           val task = Task(taskId, group, work.criteria, depth, part)
-          group.foreach(url => addDepth(url, depth))
-          open.put(taskId, task)
-          Run.allTasks.append(task)
+          group.foreach(url => setShallowestUrlDepth(url, depth))
+          tasks.put(taskId, task)
           logger.debug(s"New task $taskId for work ${work.id}")
+          task
         }
+        .toSet
     }
 
-    def get(taskId: String): Unit = {
-      open.remove(taskId)
-      inProgress.add(taskId)
-    }
-
-    def release(taskId: String): Unit = {
-      inProgress.remove(taskId)
-      Run.allTasks.append(open(taskId))
-    }
+    def release(taskId: String): Set[Task] =
+      Set(tasks(taskId))
 
     def complete(taskId: String, transfer: ContentLinksTransfer): Unit = {
-      inProgress.remove(taskId)
-      open.remove(taskId)
-      Run.release(taskId)
+      tasks.remove(taskId)
       transfer.contents.foreach { content =>
-        addDepth(content.url, content.depth)
+        setShallowestUrlDepth(content.url, content.depth)
         links.append(content)
       }
     }
 
-    private def addDepth(url: Url, depth: Int): Unit = {
+    private def setShallowestUrlDepth(url: Url, depth: Int): Unit = {
       val existingDepthIsSmaller = depths.get(url).exists(_ < depth)
       if (!existingDepthIsSmaller) depths(url) = depth
     }
 
-    def all: AllContentLinksTransfer =
+    def transfers: AllContentLinksTransfer =
       AllContentLinksTransfer(links)
 
     def isDone: Boolean =
-      open.isEmpty
+      tasks.isEmpty
+
+    def close(): Unit =
+      Run.running.remove(id)
 
   }
 
-  object Run {
+  private object Run {
 
-    private[Run] val allTasks = mutable.ListBuffer.empty[Task]
-    private[Run] val lockedPartitions = mutable.HashSet.empty[String]
-    private[Run] val taskPartition = mutable.HashMap.empty[String, String]
+    private val running = mutable.HashMap.empty[String, Run]
 
-    def next(): Option[Task] = {
-      allTasks.indexWhere(task => !lockedPartitions.contains(task.partition)) match {
-        case -1 => None
-        case n =>
-          val task = allTasks.remove(n)
-          lockedPartitions.add(task.partition)
-          taskPartition.put(task.id, task.partition)
-          Some(task)
-      }
-    }
-
-    def release(taskId: String): Unit = {
-      taskPartition.remove(taskId).foreach(lockedPartitions.remove)
-    }
-
-  }
-
-  private def fromOpenTasks: Option[Task] =
-    Run.next()
-
-  private def fromAvailableWork: Option[Task] = {
-    workAdded.headOption.flatMap { case (id, work) =>
-      workAdded.remove(id)
-      workInProgress.put(id, work)
+    def createFor(work: Work): Run = {
       val run = new Run(work)
-      runs.put(run.id, run)
-      Run.next()
+      running.put(run.id, run)
+      run
     }
+
+    def forId(taskId: String): Run = {
+      val parts = taskId.split("::")
+      running(parts.head)
+    }
+
   }
 
+  override def subscribe(subscriber: TasksSubscriber): TasksSubscription = {
+    handleNewTask = publishToSubscriber(subscriber)
+    new TasksSubscription {
+      override def unsubscribe(): Unit = handleNewTask = publishToQueue
+    }
+  }
 
 }
 

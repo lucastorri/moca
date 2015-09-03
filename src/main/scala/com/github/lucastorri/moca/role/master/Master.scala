@@ -21,14 +21,23 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
   import context._
   implicit val timeout: Timeout = 10.seconds
 
+  private val mediator = DistributedPubSub(context.system).mediator
+  private val scheduler = Scheduler(context)
+  private val subscription = repo.subscribe(scheduler.asSubscriber)
+
   private var state = State.initial()
   private var journalNumberOnSnapshot = 0L
   private var firstClean = true
-  private val mediator = DistributedPubSub(context.system).mediator
 
   override def preStart(): Unit = {
     logger.info("Master started")
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
+  }
+
+  override def postStop(): Unit = {
+    logger.info("Master going down")
+    subscription.unsubscribe()
+    super.postStop()
   }
 
   override def receiveRecover: Receive = {
@@ -59,7 +68,7 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
 
     case TaskRequest =>
       val who = sender()
-      repo.available().onComplete {
+      scheduler.next().onComplete {
         case Success(Some(task)) =>
           self ! Reply(who, TaskOffer(task))
         case Success(None) =>
@@ -81,8 +90,13 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
     case Terminated(who) =>
       logger.info(s"Worker down: $who")
       persist(WorkerDied(who))(noop)
-      repo.releaseAll(state.get(who).map(_.taskId))
-        .onFailure { case t => logger.error("Could not release worker tasks", t) }
+      val taskIds = state.get(who).map(_.taskId)
+      repo.releaseAll(taskIds).onComplete {
+        case Success(_) =>
+          scheduler.release(taskIds.toSeq: _*)
+        case Failure(t) =>
+          logger.error("Could not release worker tasks", t)
+      }
       state = state.cancel(who)
 
     case CleanUp =>
@@ -111,8 +125,12 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
       logger.info(s"Task $taskId failed")
       persist(fail)(noop)
       state = state.cancel(who, taskId)
-      repo.release(taskId)
-        .onFailure { case t => logger.error(s"Could not release $taskId", t) }
+      repo.release(taskId).onComplete {
+        case Success(_) =>
+          scheduler.release(taskId)
+        case Failure(t) =>
+          logger.error(s"Could not release $taskId", t)
+      }
 
     case TaskStarted(who, taskId) =>
       logger.info(s"Task $taskId started")
@@ -125,6 +143,7 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
       repo.done(taskId, transfer).onComplete {
         case Success(finishedWorkId) =>
           finishedWorkId.foreach(id => logger.info(s"Finished run on work $id"))
+          scheduler.release(taskId)
           who ! Ack
           self ! Done(taskId, who)
         case Failure(t) =>
