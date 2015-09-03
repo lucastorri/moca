@@ -8,8 +8,8 @@ import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.master.Master.Event
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
+import com.github.lucastorri.moca.role.master.Master.{Event, State}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -242,5 +242,61 @@ object Master {
     case class TaskDone(who: ActorRef, taskId: String) extends Event
     case class WorkerDied(who: ActorRef) extends Event
   }
+
+
+  case class State(ongoingTasks: Map[ActorRef, Set[OngoingTask]]) {
+
+    def start(who: ActorRef, taskId: String): State = {
+      val entry = who -> (get(who) + create(taskId))
+      copy(ongoingTasks = ongoingTasks + entry)
+    }
+
+    def cancel(who: ActorRef, taskId: String): State = {
+      val taskSet = get(who) - create(taskId)
+      val ongoing =
+        if (taskSet.isEmpty) ongoingTasks - who
+        else ongoingTasks + (who -> taskSet)
+      copy(ongoingTasks = ongoing)
+    }
+
+    def cancel(who: ActorRef): State =
+      copy(ongoingTasks = ongoingTasks - who)
+
+    def get(who: ActorRef): Set[OngoingTask] =
+      ongoingTasks.getOrElse(who, Set.empty)
+
+    def extendDeadline(toExtend: Map[ActorRef, Set[OngoingTask]]): State = {
+      val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.taskId)))
+      copy(ongoingTasks = ongoingTasks ++ updates)
+    }
+
+    def done(who: ActorRef, taskId: String): State =
+      cancel(who, taskId)
+
+    private def create(taskId: String): OngoingTask =
+      OngoingTask(taskId, Deadline.now + Master.pingInterval)
+
+  }
+
+  object State {
+
+    def initial(): State =
+      State(Map.empty)
+
+  }
+
+  case class OngoingTask(taskId: String, nextPing: Deadline) {
+
+    override def equals(obj: scala.Any): Boolean = obj match {
+      case other: OngoingTask => other.taskId == taskId
+      case _ => false
+    }
+
+    override def hashCode: Int = taskId.hashCode()
+
+    def shouldPing: Boolean = nextPing.isOverdue()
+
+  }
+
 
 }
