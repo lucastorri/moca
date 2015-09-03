@@ -31,7 +31,7 @@ class BrowserWindow private[browser](settings: WebKitSettings) extends Region wi
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
 
-  logger.trace(s"Region $id starting")
+  logger.trace(s"Window $id starting")
   getChildren.add(browser)
   webEngine.setUserAgent(settings.base.userAgent)
   webEngine.setJavaScriptEnabled(settings.enableJavaScript)
@@ -44,7 +44,7 @@ class BrowserWindow private[browser](settings: WebKitSettings) extends Region wi
   })
 
   def goTo(url: Url): Future[RenderedPage] = {
-    logger.trace(s"Region $id goTo $url")
+    logger.trace(s"Window $id goTo $url")
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
       this.current = url
@@ -120,17 +120,17 @@ object BrowserWindow extends StrictLogging {
       main.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
       awaiting += promise
     } else {
-      val region = pool.head
-      pool.remove(region)
-      promise.success(region)
+      val window = pool.head
+      pool.remove(window)
+      promise.success(window)
     }
     promise.future
   }
 
-  private[browser] def release(region: BrowserWindow): Unit = synchronized {
-    logger.trace(s"Release ${region.id}")
-    if (awaiting.nonEmpty) awaiting.remove(0).success(region)
-    else pool += region
+  private[browser] def release(window: BrowserWindow): Unit = synchronized {
+    logger.trace(s"Release ${window.id}")
+    if (awaiting.nonEmpty) awaiting.remove(0).success(window)
+    else pool += window
   }
 
 }

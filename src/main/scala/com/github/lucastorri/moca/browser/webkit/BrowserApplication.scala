@@ -13,12 +13,12 @@ class BrowserApplication extends Application {
 
   def newWindow(settings: WebKitSettings): Unit = {
     Platform.runLater(runnable {
-      val browser = new BrowserWindow(settings)
-      val scene = new Scene(browser, settings.width, settings.height)
+      val window = new BrowserWindow(settings)
+      val scene = new Scene(window, settings.width, settings.height)
       val stage = new Stage()
       stage.setScene(scene)
       stage.show()
-      BrowserWindow.release(browser)
+      BrowserWindow.release(window)
     })
   }
 
