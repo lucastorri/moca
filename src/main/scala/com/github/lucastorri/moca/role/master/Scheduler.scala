@@ -2,16 +2,15 @@ package com.github.lucastorri.moca.role.master
 
 import akka.actor.{ActorRefFactory, Props, Status}
 import akka.pattern.ask
-import akka.persistence.{PersistentActor, RecoveryCompleted}
+import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Scheduler.Event
 import com.github.lucastorri.moca.role.master.Scheduler.Event._
-import com.github.lucastorri.moca.role.master.SchedulerActor.State
+import com.github.lucastorri.moca.role.master.SchedulerActor.{State, TakeSnapshot}
 import com.github.lucastorri.moca.store.work.TasksSubscriber
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -46,66 +45,47 @@ object Scheduler {
 
 }
 
-//TODO use snapshots, make State immutable
 class SchedulerActor extends PersistentActor with StrictLogging {
 
   import context._
 
-  private var state = State.initial()
+  private val snapshotInterval = 10.minutes
 
-  private val partitionQueues = mutable.HashMap.empty[String, mutable.ListBuffer[Task]]
-  private val lockedPartitions = mutable.HashSet.empty[String]
-  private val taskPartition = mutable.HashMap.empty[String, String]
-  private val scheduled = mutable.ListBuffer.empty[Task]
+  private var state = State.initial()
+  private var journalNumberOnSnapshot = 0L
+
+  override def preStart(): Unit = {
+    logger.info("Scheduler starting")
+    system.scheduler.schedule(snapshotInterval, snapshotInterval, self, TakeSnapshot)
+  }
 
   override def receiveRecover: Receive = {
-
     case e: Event =>
       handle(e)
-
     case RecoveryCompleted =>
       state = State.removeRepeatedTasks(state)
   }
 
   override def receiveCommand: Receive = {
-
     case e: Event =>
       persist(e)(e => sender() ! handle(e))
-
+    case TakeSnapshot =>
+      journalNumberOnSnapshot = lastSequenceNr
+      saveSnapshot(state)
+    case SaveSnapshotSuccess(meta) =>
+      deleteMessages(journalNumberOnSnapshot - 1)
+      deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
   }
 
   def handle: Function[Event, Any] = {
-
     case Add(task) =>
-      if (lockedPartitions.contains(task.partition)) {
-        val queue = partitionQueues.getOrElseUpdate(task.partition, mutable.ListBuffer.empty)
-        queue.append(task)
-      } else {
-        lockedPartitions.add(task.partition)
-        scheduled.append(task)
-      }
-
+      state = state.add(task)
     case Next =>
-      val next = scheduled.headOption
-      next.foreach { task =>
-        scheduled.remove(0)
-        taskPartition.put(task.id, task.partition)
-      }
+      val next = state.nextTask
+      state = state.nextState
       next
-
     case Release(taskIds @ _*) =>
-      taskIds.foreach { taskId =>
-        val partition = taskPartition(taskId)
-        partitionQueues.get(partition) match {
-          case Some(queue) =>
-            scheduled.append(queue.remove(0))
-            if (queue.isEmpty) partitionQueues.remove(partition)
-          case None =>
-            lockedPartitions.remove(partition)
-        }
-        taskPartition.remove(taskId)
-      }
-
+      state = state.release(taskIds)
   }
 
   override protected def onPersistFailure(cause: Throwable, event: Any, seqNr: Long): Unit = {
@@ -118,6 +98,12 @@ class SchedulerActor extends PersistentActor with StrictLogging {
     sender() ! Status.Failure(cause)
   }
 
+  override def unhandled(message: Any): Unit = message match {
+    case _: DeleteSnapshotsSuccess =>
+    case _: DeleteMessagesSuccess =>
+    case _ => logger.error(s"Unknown message $message")
+  }
+
   override def persistenceId: String = "task-scheduler"
   override def journalPluginId: String = system.settings.config.getString("moca.master.scheduler.journal-plugin-id")
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.scheduler.snapshot-plugin-id")
@@ -126,6 +112,7 @@ class SchedulerActor extends PersistentActor with StrictLogging {
 
 object SchedulerActor {
 
+  case object TakeSnapshot
 
   case class State(queues: Map[String, Seq[Task]], locked: Set[String], partitions: Map[String, String], scheduled: Seq[Task]) {
 
@@ -188,9 +175,10 @@ object SchedulerActor {
       State(Map.empty, Set.empty, Map.empty, Seq.empty)
 
     def removeRepeatedTasks(state: State): State = {
-      val allTasks = (state.queues.values.flatten ++ state.scheduled).groupBy(identity).mapValues(_.size)
-
-      val repeated = allTasks.filter { case (task, appearances) => appearances > 1 }
+      val repeated = (state.queues.values.flatten ++ state.scheduled)
+        .groupBy(identity)
+        .mapValues(_.size)
+        .filter { case (task, appearances) => appearances > 1 }
 
       var queuesCopy = state.queues
       repeated.foreach { case (task, appearances) =>
