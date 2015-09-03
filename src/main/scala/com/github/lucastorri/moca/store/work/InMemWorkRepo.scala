@@ -70,7 +70,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
   private class Run(val work: Work) {
 
     val id = Random.alphanumeric.take(16).mkString
-    val open = mutable.HashSet.empty[String]
+    val open = mutable.HashMap.empty[String, Task]
     val inProgress = mutable.HashSet.empty[String]
     val depths = mutable.HashMap.empty[Url, Int]
     val links = mutable.ListBuffer.empty[ContentLink]
@@ -86,7 +86,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
           val taskId = s"$id::${Random.alphanumeric.take(8).mkString}"
           val task = Task(taskId, group, work.criteria, depth, part)
           group.foreach(url => addDepth(url, depth))
-          open.add(taskId)
+          open.put(taskId, task)
           Run.allTasks.append(task)
           logger.debug(s"New task $taskId for work ${work.id}")
         }
@@ -99,11 +99,12 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
 
     def release(taskId: String): Unit = {
       inProgress.remove(taskId)
-      open.add(taskId)
+      Run.allTasks.append(open(taskId))
     }
 
     def complete(taskId: String, transfer: ContentLinksTransfer): Unit = {
       inProgress.remove(taskId)
+      open.remove(taskId)
       Run.release(taskId)
       transfer.contents.foreach { content =>
         addDepth(content.url, content.depth)
@@ -120,10 +121,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
       AllContentLinksTransfer(links)
 
     def isDone: Boolean =
-      open.isEmpty && inProgress.isEmpty
-
-    def hasWork: Boolean =
-      open.nonEmpty
+      open.isEmpty
 
   }
 
