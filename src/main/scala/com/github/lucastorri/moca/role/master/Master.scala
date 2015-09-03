@@ -119,7 +119,7 @@ class Master(repo: WorkRepo) extends PersistentActor with StrictLogging {
       firstClean = false
 
     case SaveSnapshotSuccess(meta) =>
-//      if (journalNumberOnSnapshot - 1 > 0) deleteMessages(journalNumberOnSnapshot - 1) TODO does saveSnapshot does it automatically?
+      deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case fail @ TaskFailed(who, taskId) =>
