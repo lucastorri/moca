@@ -16,6 +16,7 @@ class WebKitBrowserProvider(config: Config, exec: ExecutionContext, settings: Br
     WebKitSettings(settings,
       config.getInt("width"),
       config.getInt("height"),
+      config.getBoolean("headless"),
       config.getBoolean("enable-js"))
   }
 
@@ -36,8 +37,8 @@ object WebKitBrowserProvider {
 
   private[this] var _settings: WebKitSettings = null
 
-  private[WebKitBrowserProvider] def set(settings: WebKitSettings): Unit = {
-    if (_settings != null) sys.error(s"Can not instantiate more than one ${getClass.getSimpleName}")
+  private[webkit] def set(settings: WebKitSettings): Unit = {
+    if (_settings != null) sys.error(s"Can't instantiate ${classOf[WebKitBrowserProvider].getSimpleName} more than once")
     _settings = settings
   }
 

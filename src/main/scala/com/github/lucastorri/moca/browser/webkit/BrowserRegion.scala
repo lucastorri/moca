@@ -99,7 +99,6 @@ class BrowserRegion private[browser](settings: WebKitSettings) extends Region wi
 
 object BrowserRegion extends StrictLogging {
 
-  val headless = true
   private val pool = mutable.HashSet.empty[BrowserRegion]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
   private val main = Promise[BrowserApplication]()
@@ -107,10 +106,9 @@ object BrowserRegion extends StrictLogging {
   URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
   Platform.setImplicitExit(false)
   spawn {
-    try BrowserLauncher.launch(headless)
+    try BrowserLauncher.launch(WebKitBrowserProvider.settings.headless)
     catch { case e: Exception => logger.error("Could not start browser", e) }
   }
-
 
   private[browser] def register(view: BrowserApplication): Unit =
     main.success(view)
