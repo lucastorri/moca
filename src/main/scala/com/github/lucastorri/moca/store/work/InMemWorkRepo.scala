@@ -127,7 +127,6 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
 
   object Run {
 
-    //TODO create a TaskScheduler to do this work
     private[Run] val allTasks = mutable.ListBuffer.empty[Task]
     private[Run] val lockedPartitions = mutable.HashSet.empty[String]
     private[Run] val taskPartition = mutable.HashMap.empty[String, String]
@@ -144,7 +143,7 @@ class InMemWorkRepo(partition: PartitionSelector) extends WorkRepo with StrictLo
     }
 
     def release(taskId: String): Unit = {
-      lockedPartitions.remove(taskPartition(taskId))
+      taskPartition.remove(taskId).foreach(lockedPartitions.remove)
     }
 
   }
