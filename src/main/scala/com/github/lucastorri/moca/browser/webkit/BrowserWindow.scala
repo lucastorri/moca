@@ -23,7 +23,7 @@ import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
 
-class BrowserRegion private[browser](settings: WebKitSettings) extends Region with StrictLogging {
+class BrowserWindow private[browser](settings: WebKitSettings) extends Region with StrictLogging {
 
   val id = Random.alphanumeric.take(32).mkString
   private val browser = new WebView
@@ -91,17 +91,17 @@ class BrowserRegion private[browser](settings: WebKitSettings) extends Region wi
     }
 
     override def settings: BrowserSettings =
-      BrowserRegion.this.settings.base
+      BrowserWindow.this.settings.base
 
   }
 
 }
 
-object BrowserRegion extends StrictLogging {
+object BrowserWindow extends StrictLogging {
 
   //TODO clear windows that aren't being used for a while
-  private val pool = mutable.HashSet.empty[BrowserRegion]
-  private val awaiting = mutable.ListBuffer.empty[Promise[BrowserRegion]]
+  private val pool = mutable.HashSet.empty[BrowserWindow]
+  private val awaiting = mutable.ListBuffer.empty[Promise[BrowserWindow]]
   private val main = Promise[BrowserApplication]()
 
   URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
@@ -114,8 +114,8 @@ object BrowserRegion extends StrictLogging {
   private[browser] def register(view: BrowserApplication): Unit =
     main.success(view)
 
-  private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserRegion] = synchronized {
-    val promise = Promise[BrowserRegion]()
+  private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserWindow] = synchronized {
+    val promise = Promise[BrowserWindow]()
     if (pool.isEmpty) {
       main.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
       awaiting += promise
@@ -127,7 +127,7 @@ object BrowserRegion extends StrictLogging {
     promise.future
   }
 
-  private[browser] def release(region: BrowserRegion): Unit = synchronized {
+  private[browser] def release(region: BrowserWindow): Unit = synchronized {
     logger.trace(s"Release ${region.id}")
     if (awaiting.nonEmpty) awaiting.remove(0).success(region)
     else pool += region

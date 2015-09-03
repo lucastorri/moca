@@ -22,10 +22,10 @@ class WebKitBrowserProvider(config: Config, exec: ExecutionContext, settings: Br
 
   override def instance(): Browser = new Browser with StrictLogging {
     override def goTo[T](url: Url)(f: (RenderedPage) => T): Future[T] = {
-      BrowserRegion.get().flatMap { region =>
+      BrowserWindow.get().flatMap { region =>
         logger.trace(s"Got region ${region.id}")
         val result = timeout(settings.loadTimeout)(region.goTo(url).map(f))
-        result.onComplete(_ => BrowserRegion.release(region))
+        result.onComplete(_ => BrowserWindow.release(region))
         result
       }
     }
