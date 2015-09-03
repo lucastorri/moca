@@ -22,6 +22,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   private val downloaded = mutable.HashSet.empty[Int]
   private val outstanding = mutable.LinkedHashSet.empty[Link]
+  private val recovering = true
 
   override def preStart(): Unit = {
     logger.trace(s"Minion started to work on ${task.id}")
@@ -98,14 +99,14 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   def addToQueue(found: Found): Unit = {
-    val (toAdd, toFwd) = Link.all(found).partition(link => partition.same(task, link.url))
-    parent ! Partition(toFwd)
+    val (toAdd, toFwd) = Link.all(found)
+      .filter(l => !downloaded.contains(l.url.hashCode))
+      .partition(link => partition.same(task, link.url))
 
-    toAdd.foreach { o =>
-      if (!downloaded.contains(o.url.hashCode) && !outstanding.contains(o)) {
-        outstanding += o
-      }
-    }
+    toFwd.foreach(markFetched)
+    if (toFwd.nonEmpty) parent ! Partition(toFwd)
+
+    toAdd.foreach(l => if (!outstanding.contains(l)) outstanding += l)
   }
 
   def markFetched(link: Link): Unit = {
