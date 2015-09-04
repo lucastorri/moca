@@ -40,9 +40,11 @@ case class FSTaskContentRepo(directory: Path) extends TaskContentRepo {
   }
 
   override def save(url: Url, depth: Int, content: Content): Future[Unit] = {
+    //TODO save status and headers (decide a format, maybe json)
     val file = directory.resolve(url.id)
     Files.write(file, content.content.array(), StandardOpenOption.CREATE)
-    Files.write(log, s"$url|$file|$depth\n".getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+    val logEntry = s"$url|$file|$depth|${content.hash}\n".getBytes(StandardCharsets.UTF_8)
+    Files.write(log, logEntry, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
     Future.successful(())
   }
 
@@ -52,8 +54,8 @@ case class FileContentLinksTransfer(log: String) extends ContentLinksTransfer {
 
   override def contents: Stream[ContentLink] = {
     Files.readAllLines(Paths.get(log)).asScala.toStream.map { line =>
-      val Array(url, link, depth) = line.split("\\|")
-      ContentLink(Url(url), link, depth.toInt)
+      val Array(url, link, depth, hash) = line.split("\\|")
+      ContentLink(Url(url), link, depth.toInt, hash)
     }
   }
 
