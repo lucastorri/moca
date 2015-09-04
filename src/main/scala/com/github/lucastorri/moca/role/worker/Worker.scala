@@ -37,7 +37,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
 
   override def postStop(): Unit = {
     logger.debug("Worker going down")
-    if (stateName == State.Working) master ! AbortTask(stateData.id)
+    if (stateName == State.Working) abortTask()
     super.postStop()
   }
 
@@ -83,8 +83,15 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
           retry(3)(master ? AddSubTask(stateData.id, depth, links.map(_.url)))
         }
       }
-      taskAdd.onFailure { case t => logger.error("Could not add sub-tasks", t) } //TODO should also fail worker?
+      taskAdd.onFailure { case t =>
+        logger.error("Could not add sub-tasks and will abort task", t)
+        self ! Abort
+      }
       stay()
+
+    case Event(Abort, _) =>
+      abortTask()
+      goto(State.Idle) using null
 
     case Event(Finished, _) =>
       goto(State.Idle) using null
@@ -119,7 +126,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
 
     case State.Working -> State.OnHold =>
       logger.info(s"Stopping task ${stateData.id}")
-      master ! AbortTask(stateData.id)
+      abortTask()
 
     case State.Idle -> State.OnHold =>
       logger.info("Holding worker")
@@ -129,6 +136,11 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
   override def unhandled(message: Any): Unit = message match {
     case _: DistributedPubSubMediator.SubscribeAck => logger.trace("Subscribed for new tasks")
     case _ => logger.error(s"Unexpected message on state $stateName: $message")
+  }
+
+  private def abortTask(): Unit = {
+    retry(3)(master ? AbortTask(stateData.id))
+    children.foreach(context.stop)
   }
 
 }
@@ -150,6 +162,7 @@ object Worker {
 
   case object RequestWork
   case object Done
+  case object Abort
   case object Finished
   case class Partition(urls: Set[Link])
 

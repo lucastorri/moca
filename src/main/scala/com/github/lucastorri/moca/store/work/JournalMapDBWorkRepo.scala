@@ -104,7 +104,7 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
   }
 
   def forId(taskId: String): Run = {
-    val parts = taskId.split("::")
+    val parts = taskId.split(Run.idSeparator)
     running(parts.head)
   }
 
@@ -164,7 +164,7 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
       val newWorks = added.filterNot(work => works.containsKey(work.id))
       newWorks.foreach { work =>
         works.put(work.id, ws.serialize(work))
-        val runId = Random.alphanumeric.take(16).mkString
+        val runId = Run.mkId(Run.runIdSize)
         persist(RunJournal.RunStarting(runId, work.id)) { _ =>
           logger.debug(s"New run for work ${work.id} ${work.seed} with task root id $runId")
           val run = createFor(runId, work)
@@ -251,21 +251,20 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     newTasks(Set(work.seed), 0)
 
   val unscheduledTaskTimestamp = -1
-  val separator = "::" //TODO use everywhere
 
   def newTasks(urls: Set[Url], depth: Int): Set[Task] = {
     val nt = urls.groupBy(partition.apply)
-      .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue))) //TODO dup work on setShallowestUrlDepth
+      .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue)))
       .filter { case (_, group) => group.nonEmpty }
       .map { case (part, group) =>
-      val taskId = s"$id$separator${Random.alphanumeric.take(8).mkString}"
-      val task = Task(taskId, group, work.criteria, depth, part)
-      group.foreach(url => setShallowestUrlDepth(url, depth))
-      tasks.put(taskId, ts.serialize(task))
-      taskPublishTimestamp.put(taskId, unscheduledTaskTimestamp)
-      logger.debug(s"New task $taskId for work ${work.id}")
-      task
-    }
+        val taskId = s"$id${Run.idSeparator}${Run.mkId(Run.taskIdSize)}"
+        val task = Task(taskId, group, work.criteria, depth, part)
+        group.foreach(url => depths.put(url, depth))
+        tasks.put(taskId, ts.serialize(task))
+        taskPublishTimestamp.put(taskId, unscheduledTaskTimestamp)
+        logger.debug(s"New task $taskId for work ${work.id}")
+        task
+      }
     db.commit()
     nt.toSet
   }
@@ -298,16 +297,11 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     taskPublishTimestamp.remove(taskId)
     var size = links.size()
     transfer.contents.foreach { content =>
-      setShallowestUrlDepth(content.url, content.depth)
+      depths.put(content.url, math.min(content.depth, depths.get(content.url)))
       links.put(size, cs.serialize(content))
       size += 1
     }
     db.commit()
-  }
-
-  private def setShallowestUrlDepth(url: Url, depth: Int): Unit = {
-    val existingDepthIsSmaller = Option(depths.get(url)).exists(_ < depth)
-    if (!existingDepthIsSmaller) depths.put(url, depth)
   }
 
   def transfers: AllContentLinksTransfer =
@@ -324,5 +318,15 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     db.close()
     directory.delete()
   }
+
+}
+
+object Run {
+  
+  val idSeparator = "::"
+  val runIdSize = 16
+  val taskIdSize = 8
+
+  def mkId(size: Int) = Random.alphanumeric.take(size).mkString
 
 }

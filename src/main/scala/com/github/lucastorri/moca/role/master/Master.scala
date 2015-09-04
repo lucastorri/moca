@@ -83,7 +83,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
                 self ! ws
               case Failure(t) =>
                 logger.error(s"Failed to start task ${ws.taskId} for $who", t)
-                self ! TaskFailed(ws.who, ws.taskId, recovering = false)
+                self ! TaskFailed(ws.who, ws.taskId, onFirstCleanUp = false)
             }
           }
         case None =>
@@ -125,17 +125,21 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
       deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
-    case fail @ TaskFailed(who, taskId, recovering) =>
+    case fail @ TaskFailed(who, taskId, onFirstCleanUp) =>
       logger.info(s"Task $taskId failed")
       persist(fail) { _ =>
         state = state.cancel(who, taskId)
         repo.release(taskId).onComplete {
           case Success(_) =>
-            if (!recovering) scheduler.release(taskId)
+            if (!onFirstCleanUp) scheduler.release(taskId)
           case Failure(t) =>
             logger.error(s"Could not release $taskId", t)
         }
       }
+
+    case AbortTask(taskId) =>
+      self ! TaskFailed(sender(), taskId, onFirstCleanUp = false)
+      sender() ! Ack
 
     case TaskStarted(who, taskId) =>
       logger.info(s"Task $taskId started")
@@ -240,7 +244,7 @@ object Master {
   sealed trait Event
   object Event {
     case class TaskStarted(who: ActorRef, taskId: String) extends Event
-    case class TaskFailed(who: ActorRef, taskId: String, recovering: Boolean) extends Event
+    case class TaskFailed(who: ActorRef, taskId: String, onFirstCleanUp: Boolean) extends Event
     case class TaskDone(who: ActorRef, taskId: String) extends Event
     case class WorkerDied(who: ActorRef) extends Event
   }
