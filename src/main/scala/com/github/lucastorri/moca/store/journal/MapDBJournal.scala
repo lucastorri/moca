@@ -55,7 +55,6 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
     }
   }
 
-
   private def transaction[T](persistenceId: String, commit: Boolean = true)(f: DBUnit => T): Future[T] = Future {
     val db = DBUnit(persistenceId)
     val result = f(db)

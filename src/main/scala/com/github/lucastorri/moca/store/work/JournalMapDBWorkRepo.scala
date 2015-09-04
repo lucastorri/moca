@@ -76,6 +76,12 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
 
   private val running = mutable.HashMap.empty[String, Run] //TODO make it a state
 
+  override def postStop(): Unit = {
+    super.postStop()
+    running.values.foreach(_.stop())
+    db.close()
+  }
+
   def createFor(work: Work, id: String): Run = {
     val run = new Run(id, work, base.resolve(id).toFile, system, partition)
     running.put(run.id, run)
@@ -251,6 +257,10 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
 
   def isDone: Boolean =
     tasks.isEmpty
+
+  def stop(): Unit = {
+    db.close()
+  }
 
   def close(): Unit = {
     db.close()
