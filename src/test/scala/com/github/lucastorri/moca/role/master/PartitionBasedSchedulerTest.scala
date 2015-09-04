@@ -1,12 +1,11 @@
 package com.github.lucastorri.moca.role.master
 
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.store.scheduler.SchedulerActor
-import SchedulerActor.State
+import com.github.lucastorri.moca.scheduler.PartitionBasedScheduler.State
 import com.github.lucastorri.moca.url.Url
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 
-class SchedulerStateTest extends FlatSpec with MustMatchers {
+class PartitionBasedSchedulerTest extends FlatSpec with MustMatchers {
 
   it must "keep only the scheduled task when removing duplicates" in {
 

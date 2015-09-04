@@ -13,7 +13,7 @@ import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, Check
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.content.ContentRepo
-import com.github.lucastorri.moca.store.scheduler.TaskScheduler
+import com.github.lucastorri.moca.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -119,8 +119,7 @@ case class MocaConfig(
 
   lazy val scheduler: TaskScheduler = {
     val providerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
-    val build = ClassBuilder.fromConfig(providerConfig,
-      classOf[ActorSystem] -> system)
+    val build = ClassBuilder.fromConfig(providerConfig)
 
     build()
   }

@@ -12,7 +12,7 @@ import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
 import com.github.lucastorri.moca.role.master.Master.{Event, State}
-import com.github.lucastorri.moca.store.scheduler.TaskScheduler
+import com.github.lucastorri.moca.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -34,12 +34,12 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
     logger.info("Master started")
     bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
+    repo.republishAllTasks()
   }
 
   override def postStop(): Unit = {
     logger.info("Master going down")
     repo.close()
-    scheduler.close()
     super.postStop()
   }
 
@@ -71,23 +71,20 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
 
     case TaskRequest =>
       val who = sender()
-      scheduler.next().onComplete {
-        case Success(Some(task)) =>
-          self ! Reply(who, TaskOffer(task))
-        case Success(None) =>
-        case Failure(t) =>
-          logger.error("Could not get next task available", t)
-      }
-
-    case Reply(who, offer) =>
-      persist(TaskStarted(who, offer.task.id)) { ws =>
-        retry(3)(ws.who ? offer).acked.onComplete {
-          case Success(_) =>
-            self ! ws
-          case Failure(t) =>
-            logger.error(s"Failed to start task ${ws.taskId} for $who", t)
-            self ! TaskFailed(ws.who, ws.taskId)
-        }
+      scheduler.next() match {
+        case Some(task) =>
+          val offer = TaskOffer(task)
+          persist(TaskStarted(who, task.id)) { ws =>
+            retry(3)(ws.who ? offer).acked.onComplete {
+              case Success(_) =>
+                self ! ws
+              case Failure(t) =>
+                logger.error(s"Failed to start task ${ws.taskId} for $who", t)
+                self ! TaskFailed(ws.who, ws.taskId)
+            }
+          }
+        case None =>
+          who ! Nack
       }
 
     case Terminated(who) =>
@@ -212,7 +209,6 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 
   case object CleanUp
-  case class Reply(who: ActorRef, offer: TaskOffer)
   case class Done(taskId: String, who: ActorRef)
   case class NewTask(task: Task)
 

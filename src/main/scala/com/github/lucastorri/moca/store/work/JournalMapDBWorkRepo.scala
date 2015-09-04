@@ -12,10 +12,10 @@ import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.store.serialization.KryoSerialization
+import com.github.lucastorri.moca.store.work.RunJournal.PublishAll
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
-import org.apache.commons.io.FileUtils
 import org.mapdb.DBMaker
 
 import scala.collection.JavaConversions._
@@ -48,10 +48,12 @@ class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: Parti
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = 
     (journal ? RunJournal.MarkDone(taskId, transfer)).mapTo[Option[String]]
 
+  override def republishAllTasks(): Future[Unit] =
+    (journal ? RunJournal.PublishAll).mapTo[Unit]
+
   override def close(): Unit = {
     system.stop(journal)
   }
-
 }
 
 class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) extends PersistentActor with StrictLogging {
@@ -111,6 +113,9 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
 
     case PublishTasks(run) =>
       run.unpublishedTasks.foreach(task => bus.publish(EventBus.NewTasks, task))
+
+    case PublishAll =>
+      running.values.foreach(run => run.allTasks.foreach(task => bus.publish(EventBus.NewTasks, task)))
 
   }
 
@@ -181,6 +186,8 @@ object RunJournal {
   case class MarkDone(taskId: String, transfer: ContentLinksTransfer) extends Command
   case class GetLinks(workId: String) extends Command
 
+  case object PublishAll
+
 }
 
 case class Run(id: String, work: Work, directory: File, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
@@ -227,6 +234,16 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     val unpublished = taskPublishTimestamp.filter { case (_, t) => t == unscheduledTaskTimestamp }.keySet.map { taskId =>
       taskPublishTimestamp.put(taskId, timestamp)
       ts.deserialize(tasks.get(taskId))
+    }
+    db.commit()
+    unpublished.toSet
+  }
+
+  def allTasks: Set[Task] = {
+    val timestamp = System.currentTimeMillis()
+    val unpublished = tasks.map { case (taskId, task) =>
+      taskPublishTimestamp.put(taskId, timestamp)
+      ts.deserialize(task)
     }
     db.commit()
     unpublished.toSet

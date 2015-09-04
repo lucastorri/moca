@@ -7,7 +7,7 @@ import com.github.lucastorri.moca.url.Url
 import scala.concurrent.Future
 
 trait WorkRepo {
-
+  
   def addWork(added: Set[Work]): Future[Boolean]
 
   def links(workId: String): Future[Option[ContentLinksTransfer]]
@@ -20,6 +20,8 @@ trait WorkRepo {
   def releaseAll(taskIds: Set[String]): Future[Unit]
   
   def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit]
+
+  def republishAllTasks(): Future[Unit]
 
 
   def close(): Unit

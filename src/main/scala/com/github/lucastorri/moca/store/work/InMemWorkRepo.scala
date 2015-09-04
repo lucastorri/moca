@@ -3,7 +3,7 @@ package com.github.lucastorri.moca.store.work
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
-import com.github.lucastorri.moca.store.scheduler.TaskScheduler
+import com.github.lucastorri.moca.scheduler.TaskScheduler
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
@@ -56,6 +56,9 @@ class InMemWorkRepo(partition: PartitionSelector, scheduler: TaskScheduler) exte
 
     Future.successful(if (r.isDone) Some(r.work.id) else None)
   }
+
+  override def republishAllTasks(): Future[Unit] =
+    Future.successful(())
 
 
   private class Run private[Run](val work: Work) {
@@ -130,7 +133,6 @@ class InMemWorkRepo(partition: PartitionSelector, scheduler: TaskScheduler) exte
   }
 
   override def close(): Unit = {}
-
 }
 
 case class AllContentLinksTransfer(all: Seq[ContentLink]) extends ContentLinksTransfer {
