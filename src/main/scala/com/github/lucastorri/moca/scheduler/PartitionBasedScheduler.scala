@@ -3,7 +3,6 @@ package com.github.lucastorri.moca.scheduler
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.scheduler.PartitionBasedScheduler.State
 
-//TODO reload all open tasks when starting it all
 class PartitionBasedScheduler extends TaskScheduler {
 
   private var state = State.initial()
