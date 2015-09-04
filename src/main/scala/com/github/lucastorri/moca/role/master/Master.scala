@@ -7,7 +7,9 @@ import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
+import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.role.Messages._
+import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
 import com.github.lucastorri.moca.role.master.Master.{Event, State}
 import com.github.lucastorri.moca.store.scheduler.TaskScheduler
@@ -17,7 +19,7 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor with StrictLogging {
+class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
@@ -30,6 +32,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor w
 
   override def preStart(): Unit = {
     logger.info("Master started")
+    bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
   }
 
@@ -168,7 +171,6 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor w
       repo.addWork(seeds).onComplete {
         case Success(_) =>
           who ! Ack
-          announceTasksAvailable()
         case Failure(t) =>
           logger.error("Could not add seeds", t)
       }
@@ -178,7 +180,6 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor w
       repo.addTask(taskId, depth, urls).onComplete {
         case Success(_) =>
           who ! Ack
-          announceTasksAvailable()
         case Failure(t) =>
           logger.error("Could not add sub-task", t)
           who ! Nack
@@ -194,10 +195,11 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor w
           who ! Nack
       }
 
-  }
+    case NewTask(task) =>
+      scheduler.add(task)
+      mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
 
-  def announceTasksAvailable(): Unit =
-    mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
+  }
 
   override def unhandled(message: Any): Unit = message match {
     case _: DeleteSnapshotsSuccess =>
@@ -212,6 +214,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler) extends PersistentActor w
   case object CleanUp
   case class Reply(who: ActorRef, offer: TaskOffer)
   case class Done(taskId: String, who: ActorRef)
+  case class NewTask(task: Task)
 
 }
 
@@ -229,9 +232,9 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(work: => WorkRepo, scheduler: => TaskScheduler)(implicit system: ActorSystem): Unit = {
+  def standBy(work: => WorkRepo, scheduler: => TaskScheduler, bus: EventBus)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
-    val manager = ClusterSingletonManager.props(Props(new Master(work, scheduler)), PoisonPill, settings)
+    val manager = ClusterSingletonManager.props(Props(new Master(work, scheduler, bus)), PoisonPill, settings)
     system.actorOf(manager, name)
   }
 

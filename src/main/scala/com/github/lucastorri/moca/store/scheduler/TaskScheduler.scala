@@ -1,16 +1,17 @@
 package com.github.lucastorri.moca.store.scheduler
 
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.store.work.TaskSubscriber
 
 import scala.concurrent.Future
 
-trait TaskScheduler extends TaskSubscriber {
+trait TaskScheduler {
 
-   def next(): Future[Option[Task]]
+  def add(task: Task): Future[Unit]
 
-   def release(taskIds: String*): Future[Unit]
+  def next(): Future[Option[Task]]
 
-   def close(): Unit
+  def release(taskIds: String*): Future[Unit]
 
- }
+  def close(): Unit
+
+}

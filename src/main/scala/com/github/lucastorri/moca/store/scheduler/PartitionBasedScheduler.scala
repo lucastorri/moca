@@ -4,6 +4,7 @@ import akka.actor.{ActorSystem, Props, Status}
 import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
+import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.store.scheduler.PartitionBasedScheduler._
 import com.github.lucastorri.moca.store.scheduler.SchedulerActor.{State, TakeSnapshot}

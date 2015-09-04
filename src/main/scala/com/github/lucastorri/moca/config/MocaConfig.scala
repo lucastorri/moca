@@ -6,6 +6,7 @@ import java.nio.charset.Charset
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.browser.{BrowserProvider, BrowserSettings}
 import com.github.lucastorri.moca.config.MocaConfig._
+import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
@@ -78,7 +79,8 @@ case class MocaConfig(
     val build = ClassBuilder.fromConfig(repoConfig,
       classOf[ActorSystem] -> system,
       classOf[PartitionSelector] -> partition,
-      classOf[TaskScheduler] -> scheduler)
+      classOf[TaskScheduler] -> scheduler,
+      classOf[EventBus] -> bus)
 
     build()
   }
@@ -119,6 +121,13 @@ case class MocaConfig(
     val providerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
     val build = ClassBuilder.fromConfig(providerConfig,
       classOf[ActorSystem] -> system)
+
+    build()
+  }
+
+  lazy val bus: EventBus = {
+    val providerConfig = main.getConfig(main.getString("moca.event-bus-id"))
+    val build = ClassBuilder.fromConfig(providerConfig)
 
     build()
   }

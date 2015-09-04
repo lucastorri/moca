@@ -7,10 +7,10 @@ import akka.actor.{ActorSystem, Props, Status}
 import akka.pattern.ask
 import akka.persistence.PersistentActor
 import akka.util.Timeout
+import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
-import com.github.lucastorri.moca.store.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.serialization.KryoSerialization
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
@@ -24,10 +24,9 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Random, Try}
 
-class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSelector, scheduler: TaskScheduler) extends WorkRepo with StrictLogging {
+class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSelector, bus: EventBus) extends WorkRepo with StrictLogging {
 
-
-  private val journal = system.actorOf(Props(new RunJournal(config, partition, scheduler)))
+  private val journal = system.actorOf(Props(new RunJournal(config, partition, bus)))
 
   implicit val timeout: Timeout = 15.seconds
 
@@ -49,16 +48,13 @@ class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: Parti
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = 
     (journal ? RunJournal.MarkDone(taskId, transfer)).mapTo[Option[String]]
 
-
-  def close(): Unit = {
+  override def close(): Unit = {
     system.stop(journal)
   }
 
-
 }
 
-
-class RunJournal(config: Config, partition: PartitionSelector, scheduler: TaskScheduler) extends PersistentActor with StrictLogging {
+class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
 
@@ -107,6 +103,9 @@ class RunJournal(config: Config, partition: PartitionSelector, scheduler: TaskSc
         }
       }
 
+    case PublishTasks(run) =>
+      run.unpublishedTasks.foreach(task => bus.publish(EventBus.NewTasks, task))
+
   }
 
   def handle: Function[RunJournal.Command, Any] = {
@@ -119,16 +118,23 @@ class RunJournal(config: Config, partition: PartitionSelector, scheduler: TaskSc
         persist(RunJournal.RunStarting(runId, work.id)) { _ =>
           logger.debug(s"New run for work ${work.id} ${work.seed} with task root id $runId")
           val run = createFor(work, runId)
-          run.initialTasks().foreach(scheduler.add)
+          run.initialTasks()
+          self ! PublishTasks(run)
         }
       }
       newWorks.nonEmpty
 
     case RunJournal.AddTask(parentId, depth, urls) =>
-      forId(parentId).newTasks(urls, depth).foreach(scheduler.add)
+      val run = forId(parentId)
+      run.newTasks(urls, depth)
+      self ! PublishTasks(run)
 
     case RunJournal.Release(taskIds) =>
-      taskIds.map(taskId => forId(taskId).release(taskId)).foreach(scheduler.add)
+      taskIds.foreach { taskId =>
+        val run = forId(taskId)
+        run.release(taskId)
+        self ! PublishTasks(run)
+      }
 
     case RunJournal.MarkDone(taskId, transfer) =>
       val r = forId(taskId)
@@ -147,6 +153,8 @@ class RunJournal(config: Config, partition: PartitionSelector, scheduler: TaskSc
       Option(latestResults.get(workId)).map(rs.deserialize)
 
   }
+
+  case class PublishTasks(run: Run)
 
   override def persistenceId: String = "journal-mapdb-work-repo"
   override def journalPluginId: String = config.getString("journal-plugin-id")
@@ -177,7 +185,7 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     .cacheLRUEnable()
     .make()
 
-  private val taskPublishTimestamp = db.hashMap[String, Long]("task-timestamps") //TODO
+  private val taskPublishTimestamp = db.hashMap[String, Long]("task-timestamps")
   private val tasks = db.hashMap[String, Array[Byte]]("tasks")
   private val depths = db.hashMap[Url, Int]("depths")
   private val links = db.hashMap[Int, Array[Byte]]("links")
@@ -185,21 +193,18 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
   private val ts = new KryoSerialization[Task](system)
   private val cs = new KryoSerialization[ContentLink](system)
 
-  //    val tasks = mutable.HashMap.empty[String, Task]
-  //    val depths = mutable.HashMap.empty[Url, Int]
-  //    val links = mutable.ListBuffer.empty[ContentLink]
-
   def initialTasks(): Set[Task] =
     newTasks(Set(work.seed), 0)
 
-  private val unscheduledTaskTimestamp = -1
+  val unscheduledTaskTimestamp = -1
+  val separator = "::"
 
   def newTasks(urls: Set[Url], depth: Int): Set[Task] = {
     val nt = urls.groupBy(partition.apply)
       .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue))) //TODO dup work on setShallowestUrlDepth
       .filter { case (_, group) => group.nonEmpty }
       .map { case (part, group) =>
-      val taskId = s"$id::${Random.alphanumeric.take(8).mkString}"
+      val taskId = s"$id$separator${Random.alphanumeric.take(8).mkString}"
       val task = Task(taskId, group, work.criteria, depth, part)
       group.foreach(url => setShallowestUrlDepth(url, depth))
       tasks.put(taskId, ts.serialize(task))
