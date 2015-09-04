@@ -57,9 +57,6 @@ class InMemWorkRepo(partition: PartitionSelector, scheduler: TaskScheduler) exte
     Future.successful(if (r.isDone) Some(r.work.id) else None)
   }
 
-  override def republishAllTasks(): Future[Unit] =
-    Future.successful(())
-
 
   private class Run private[Run](val work: Work) {
 

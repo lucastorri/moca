@@ -49,9 +49,6 @@ class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: Parti
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = 
     (journal ? RunJournal.MarkDone(taskId, transfer)).mapTo[Option[String]]
 
-  override def republishAllTasks(): Future[Unit] =
-    (journal ? RunJournal.PublishAll).mapTo[Unit]
-
   override def close(): Unit = {
     system.stop(journal)
   }
@@ -144,9 +141,6 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
 
     case PublishTasks(run) =>
       run.unpublishedTasks.foreach(task => bus.publish(EventBus.NewTasks, task))
-
-    case PublishAll =>
-      running.values.foreach(run => run.allTasks.foreach(task => bus.publish(EventBus.NewTasks, task)))
 
     case Snapshot =>
       journalNumberOnSnapshot = lastSequenceNr

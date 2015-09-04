@@ -21,8 +21,6 @@ trait WorkRepo {
   
   def addTask(parentTaskId: String, linksDepth: Int, links: Set[Url]): Future[Unit]
 
-  def republishAllTasks(): Future[Unit]
-
 
   def close(): Unit
 

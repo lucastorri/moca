@@ -20,6 +20,7 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
+//TODO after recovery, might receive commands before the scheduler is updated with the last state
 class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
@@ -35,14 +36,13 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
     logger.info("Master started")
     bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
-    repo.republishAllTasks()
     bus.publish(MasterEvents, MasterUp)
   }
 
   override def postStop(): Unit = {
     logger.info("Master going down")
-    repo.close()
     bus.publish(MasterEvents, MasterDown)
+    repo.close()
     super.postStop()
   }
 
@@ -74,20 +74,26 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
 
     case TaskRequest =>
       val who = sender()
-      scheduler.next() match {
-        case Some(task) =>
-          val offer = TaskOffer(task)
-          persist(TaskStarted(who, task.id)) { ws =>
-            retry(3)(ws.who ? offer).acked.onComplete {
-              case Success(_) =>
-                self ! ws
-              case Failure(t) =>
-                logger.error(s"Failed to start task ${ws.taskId} for $who", t)
-                self ! TaskFailed(ws.who, ws.taskId, onFirstCleanUp = false)
-            }
-          }
-        case None =>
+      scheduler.next().onComplete {
+        case Success(Some(task)) =>
+          self ! Reply(who, TaskOffer(task))
+        case Success(None) =>
           who ! Nack
+        case Failure(t) =>
+          logger.error("Failed to retrieve next task", t)
+          who ! Nack
+      }
+
+    case Reply(who, offer) =>
+      persist(TaskStarted(who, offer.task.id)) { ws =>
+        state = state.start(who, offer.task.id)
+        retry(3)(ws.who ? offer).acked.onComplete {
+          case Success(_) =>
+            self ! ws
+          case Failure(t) =>
+            logger.error(s"Failed to start task ${ws.taskId} for $who", t)
+            self ! TaskFailed(ws.who, ws.taskId, onFirstCleanUp = false)
+        }
       }
 
     case Terminated(who) =>
@@ -105,8 +111,8 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
 
     case CleanUp =>
       logger.trace("Clean up")
-      if (!firstClean) saveSnapshot(state)
       journalNumberOnSnapshot = lastSequenceNr
+      if (!firstClean) saveSnapshot(state)
 
       val toExtend = state.ongoingTasks.map { case (who, all) =>
         val toPing = all.filter(_.shouldPing || firstClean)
@@ -166,6 +172,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
       }
 
     case ConsistencyCheck =>
+      //TODO it might receive later on a Finished for a task that wasn't persisted, on that case, trigger this
       //TODO check if any work that was made available is not on the current state
       sender() ! Ack
 
@@ -218,6 +225,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
   case object CleanUp
   case class Done(taskId: String, who: ActorRef)
   case class NewTask(task: Task)
+  case class Reply(who: ActorRef, offer: TaskOffer)
 
 }
 
