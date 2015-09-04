@@ -8,6 +8,7 @@ import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.event.EventBus
+import com.github.lucastorri.moca.event.EventBus.MasterEvents
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
@@ -35,11 +36,13 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
     bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
     repo.republishAllTasks()
+    bus.publish(MasterEvents, MasterUp)
   }
 
   override def postStop(): Unit = {
     logger.info("Master going down")
     repo.close()
+    bus.publish(MasterEvents, MasterDown)
     super.postStop()
   }
 

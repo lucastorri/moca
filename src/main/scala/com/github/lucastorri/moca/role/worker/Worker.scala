@@ -6,10 +6,11 @@ import akka.pattern.ask
 import akka.util.{Timeout => AskTimeout}
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.browser.BrowserProvider
+import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.Master
+import com.github.lucastorri.moca.role.master.{Master, MasterDown, MasterUp}
 import com.github.lucastorri.moca.role.worker.Worker._
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.typesafe.scalalogging.StrictLogging
@@ -18,7 +19,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector) extends Actor with FSM[State, Task] with StrictLogging {
+class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, stopOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 10.seconds
@@ -31,6 +32,13 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     logger.info("Worker started")
     self ! RequestWork
     mediator ! DistributedPubSubMediator.Subscribe(TasksAvailable.topic, self)
+    if (stopOnMasterUp) bus.subscribe(EventBus.MasterEvents) { e => self ! e }
+  }
+
+  override def postStop(): Unit = {
+    logger.debug("Worker going down")
+    if (stateName == State.Working) master ! AbortTask(stateData.id)
+    super.postStop()
   }
 
   startWith(State.Idle, null)
@@ -45,6 +53,9 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       sender() ! Ack
       actorOf(Props(new Minion(task, browserProvider.instance(), repo(task), partition)))
       goto(State.Working) using task
+
+    case Event(MasterUp, _) =>
+      goto(State.Stopped)
 
   }
 
@@ -78,6 +89,20 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     case Event(Finished, _) =>
       goto(State.Idle) using null
 
+    case Event(MasterUp, _) =>
+      goto(State.Stopped) using null
+
+  }
+
+  when(State.Stopped) {
+
+    case Event(MasterDown, _) =>
+      goto(State.Idle)
+
+    case Event(TaskOffer(task), _) =>
+      sender() ! Nack
+      stay()
+
   }
 
   onTransition {
@@ -89,11 +114,17 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       logger.info(s"Task ${stateData.id} done")
       self ! RequestWork
 
+    case State.Stopped -> State.Idle =>
+      self ! RequestWork
+
+    case State.Working -> State.Stopped =>
+      logger.info(s"Stopping task ${stateData.id}")
+      master ! AbortTask(stateData.id)
   }
 
   override def unhandled(message: Any): Unit = message match {
     case _: DistributedPubSubMediator.SubscribeAck => logger.trace("Subscribed for new tasks")
-    case _ => logger.error(s"Unknown message $message")
+    case _ => logger.error(s"Unexpected message on state $stateName: $message")
   }
 
 }
@@ -102,15 +133,15 @@ object Worker {
 
   val role = "worker"
 
-  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector)(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props(new Worker(repo, browserProvider, partition)), s"worker-$id")
+  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, stopOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(new Worker(repo, browserProvider, partition, bus, stopOnMasterUp)), s"worker-$id")
   }
 
   sealed trait State
   object State {
     case object Working extends State
-    case object Finishing extends State
     case object Idle extends State
+    case object Stopped extends State
   }
 
   case object RequestWork

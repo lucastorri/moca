@@ -18,6 +18,7 @@ object Messages {
   case class AddWork(seeds: Set[Work])
   case object TasksAvailable { val topic = "work-announcement" }
   case class AddSubTask(taskId: String, initialDepth: Int, urls: Set[Url])
+  case class AbortTask(taskId: String)
 
   case object ConsistencyCheck
 

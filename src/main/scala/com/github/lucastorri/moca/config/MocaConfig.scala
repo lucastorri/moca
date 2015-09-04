@@ -12,8 +12,8 @@ import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
-import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.scheduler.TaskScheduler
+import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -28,6 +28,7 @@ case class MocaConfig(
   workers: Int = 10,
   clientCommands: Set[Client.Command[_]] = Set.empty,
   extraConfig: Option[File] = Option.empty,
+  dedicatedMaster: Boolean = false,
   private var _roles: Set[String] = Set(Master.role, Worker.role)
 ) {
 
@@ -182,6 +183,10 @@ object MocaConfig {
       .text("extra conf file")
       .validate(f => if (f.isFile) success else failure(s"invalid file $f"))
       .action { (f, c) => c.copy(extraConfig = Some(f)) }
+
+    opt[Unit]('d', "dedicated-master")
+      .text("indicate that master should be the only thing running on a given system")
+      .action { (d, c) => c.copy(dedicatedMaster = true) }
 
     help("help")
       .text("prints this usage text")

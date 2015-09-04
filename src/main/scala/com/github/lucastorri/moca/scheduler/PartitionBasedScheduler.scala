@@ -55,7 +55,6 @@ object PartitionBasedScheduler {
       var partitionsCopy = partitions
       var scheduledCopy = scheduled
 
-      //TODO fails on restarts --- maybe should regenerate task ids, so old messages comming from workers are forgotten
       taskIds.foreach { taskId =>
         val partition = partitions(taskId)
         queues.get(partition) match {
