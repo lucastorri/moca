@@ -254,7 +254,7 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
 
   def close(): Unit = {
     db.close()
-    FileUtils.deleteDirectory(directory)
+    directory.delete()
   }
 
 }
