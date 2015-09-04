@@ -14,21 +14,19 @@ class JsonContentSerializer extends ContentSerializer {
 
   val charset = StandardCharsets.UTF_8
 
-  override def serialize(url: Url, content: Content): ByteBuffer = {
-    withUrl(url) { _ ~
-      ("status" -> content.status)  ~
-      ("headers" -> content.headers) ~
-      ("content" -> Base64.getEncoder.encodeToString(content.content.array()))
-    }
+  override def serialize(url: Url, content: Content): ByteBuffer = serialize {
+    ("url" -> url.toString) ~
+    ("status" -> content.status)  ~
+    ("headers" -> content.headers) ~
+    ("content" -> Base64.getEncoder.encodeToString(content.content.array()))
   }
 
-  override def serialize(url: Url, exception: Throwable): ByteBuffer = {
-    withUrl(url) { _ ~
-      ("error" -> exception)
-    }
+  override def serialize(url: Url, error: Throwable): ByteBuffer = serialize {
+    ("url" -> url.toString) ~
+    ("error" -> s"[${error.getClass.getName}] ${error.getMessage}")
   }
 
-  private def withUrl(url: Url)(f: ((String, String)) => JObject): ByteBuffer =
-    charset.encode(compact(render(f("url" -> url.toString))))
+  private def serialize(obj: JObject): ByteBuffer =
+    charset.encode(compact(render(obj)))
 
 }
