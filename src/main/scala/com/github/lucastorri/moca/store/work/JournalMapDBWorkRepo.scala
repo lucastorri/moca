@@ -5,7 +5,7 @@ import java.nio.file._
 
 import akka.actor.{ActorSystem, Props, Status}
 import akka.pattern.ask
-import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
+import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
@@ -54,6 +54,7 @@ class JournalMapDBWorkRepo(config: Config, system: ActorSystem, partition: Parti
   override def close(): Unit = {
     system.stop(journal)
   }
+
 }
 
 class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) extends PersistentActor with StrictLogging {
@@ -67,7 +68,6 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     .appendFileDB(base.resolve("__main").toFile)
     .closeOnJvmShutdown()
     .cacheLRUEnable()
-//    .allocateIncrement(increment.toBytes) //TODO
     .make()
 
   val snapshotInterval = 10.minutes
@@ -77,7 +77,8 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
   private val ws = new KryoSerialization[Work](system)
   private val rs = new KryoSerialization[AllContentLinksTransfer](system)
 
-  private val running = mutable.HashMap.empty[String, Run] //TODO make it a state (keys only), save snapshot
+  private val running = mutable.HashMap.empty[String, Run]
+  private var journalNumberOnSnapshot = 0L
 
   override def preStart(): Unit = {
     system.scheduler.schedule(snapshotInterval, snapshotInterval, self, Snapshot)
@@ -147,9 +148,14 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
       running.values.foreach(run => run.allTasks.foreach(task => bus.publish(EventBus.NewTasks, task)))
 
     case Snapshot =>
+      journalNumberOnSnapshot = lastSequenceNr
       val snapshot = running.map { case (runId, run) => RunStarting(runId, run.work.id) }.toSet
       saveSnapshot(State(snapshot))
 
+    case SaveSnapshotSuccess(meta) =>
+      deleteMessages(journalNumberOnSnapshot - 1)
+      deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
+      
   }
 
   def handle: Function[RunJournal.Command, Any] = {
