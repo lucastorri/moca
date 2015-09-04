@@ -20,6 +20,7 @@ import org.mapdb.DBMaker
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.compat.Platform
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Random, Try}
@@ -270,7 +271,7 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
   }
 
   def unpublishedTasks: Set[Task] = {
-    val timestamp = System.currentTimeMillis()
+    val timestamp = Platform.currentTime
     val unpublished = taskPublishTimestamp.filter { case (_, t) => t == unscheduledTaskTimestamp }.keySet.map { taskId =>
       taskPublishTimestamp.put(taskId, timestamp)
       ts.deserialize(tasks.get(taskId))
@@ -280,7 +281,7 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
   }
 
   def allTasks: Set[Task] = {
-    val timestamp = System.currentTimeMillis()
+    val timestamp = Platform.currentTime
     val unpublished = tasks.map { case (taskId, task) =>
       taskPublishTimestamp.put(taskId, timestamp)
       ts.deserialize(task)

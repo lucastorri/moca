@@ -132,11 +132,12 @@ case class MocaConfig(
     build()
   }
 
-  //TODO consider an injection library
-
 }
 
 object MocaConfig {
+
+  def parse(args: Array[String]): MocaConfig =
+    parser.parse(args, MocaConfig()).getOrElse(sys.exit(1))
 
   private val parser = new scopt.OptionParser[MocaConfig](BuildInfo.name) {
 
@@ -192,10 +193,6 @@ object MocaConfig {
       .text("prints this usage text")
 
   }
-
-  def parse(args: Array[String]): MocaConfig =
-    parser.parse(args, MocaConfig()).getOrElse(sys.exit(1))
-
 
   private def seed(systemName: String, hostAndPort: String): String =
     s"akka.tcp://$systemName@$hostAndPort"

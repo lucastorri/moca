@@ -3,6 +3,7 @@ package com.github.lucastorri.moca.browser.webkit
 import java.io.StringWriter
 import java.net.{Proxy, URL, URLConnection, URLStreamHandler, URLStreamHandlerFactory}
 import java.nio.CharBuffer
+import java.util.concurrent.{TimeUnit, Executors}
 import javafx.application.Platform
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.concurrent.Worker.State
@@ -10,6 +11,7 @@ import javafx.concurrent.{Worker => JFXWorker}
 import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 import javafx.scene.web.WebView
+import javafx.stage.Stage
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 import javax.xml.transform.{OutputKeys, TransformerFactory}
@@ -20,16 +22,19 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.mutable
+import scala.compat.Platform.currentTime
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
+import scala.concurrent.duration._
 
-class BrowserWindow private[browser](settings: WebKitSettings) extends Region with StrictLogging {
+class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
 
   val id = Random.alphanumeric.take(32).mkString
   private val browser = new WebView
   private val webEngine = browser.getEngine
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
+  private var lastUsed = 0L
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -45,6 +50,7 @@ class BrowserWindow private[browser](settings: WebKitSettings) extends Region wi
 
   def goTo(url: Url): Future[RenderedPage] = {
     logger.trace(s"Window $id goTo $url")
+    lastUsed = currentTime
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
       this.current = url
@@ -95,14 +101,22 @@ class BrowserWindow private[browser](settings: WebKitSettings) extends Region wi
 
   }
 
+  override def compare(that: BrowserWindow): Int =
+    this.lastUsed.compareTo(that.lastUsed)
+
+  def close(): Unit = {
+    stage.close()
+  }
+
+
 }
 
 object BrowserWindow extends StrictLogging {
 
-  //TODO clear windows that aren't being used for a while
-  private val pool = mutable.HashSet.empty[BrowserWindow]
+  private val cleanInterval = 10.minutes
+  private val pool = mutable.TreeSet.empty[BrowserWindow]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserWindow]]
-  private val main = Promise[BrowserApplication]()
+  private val app = Promise[BrowserApplication]()
 
   URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
   Platform.setImplicitExit(false)
@@ -110,14 +124,16 @@ object BrowserWindow extends StrictLogging {
     try BrowserLauncher.launch(WebKitBrowserProvider.settings.headless)
     catch { case e: Exception => logger.error("Could not start browser", e) }
   }
+  Executors.newScheduledThreadPool(1)
+    .scheduleWithFixedDelay(cleaningTask, cleanInterval.toMillis, cleanInterval.toMillis, TimeUnit.MILLISECONDS)
 
   private[browser] def register(view: BrowserApplication): Unit =
-    main.success(view)
+    app.success(view)
 
   private[browser] def get()(implicit exec: ExecutionContext): Future[BrowserWindow] = synchronized {
     val promise = Promise[BrowserWindow]()
     if (pool.isEmpty) {
-      main.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
+      app.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
       awaiting += promise
     } else {
       val window = pool.head
@@ -131,6 +147,16 @@ object BrowserWindow extends StrictLogging {
     logger.trace(s"Release ${window.id}")
     if (awaiting.nonEmpty) awaiting.remove(0).success(window)
     else pool += window
+  }
+
+  private[this] val cleaningTask = runnable {
+    BrowserWindow.synchronized {
+      pool.takeWhile(window => (currentTime - window.lastUsed).millis > cleanInterval).foreach { window =>
+        logger.info(s"Closing window ${window.id} for inactivity")
+        window.close()
+        pool.remove(window)
+      }
+    }
   }
 
 }

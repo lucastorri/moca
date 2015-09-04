@@ -22,10 +22,10 @@ import scala.util.{Failure, Success}
 class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
-  implicit val timeout: AskTimeout = 10.seconds
+  implicit val timeout: AskTimeout = 15.seconds
+  private val requestWorkInterval = 5.minute
 
   private val mediator = DistributedPubSub(context.system).mediator
-  private val requestWorkInterval = 5.minute
   private val master = Master.proxy()
 
   override def preStart(): Unit = {
