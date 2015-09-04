@@ -5,14 +5,14 @@ import java.nio.file._
 
 import akka.actor.{ActorSystem, Props, Status}
 import akka.pattern.ask
-import akka.persistence.PersistentActor
+import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
 import akka.util.Timeout
 import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.store.serialization.KryoSerialization
-import com.github.lucastorri.moca.store.work.RunJournal.PublishAll
+import com.github.lucastorri.moca.store.work.RunJournal._
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -70,13 +70,18 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
 //    .allocateIncrement(increment.toBytes) //TODO
     .make()
 
+  val snapshotInterval = 10.minutes
   private val works = db.hashMap[String, Array[Byte]]("works")
   private val latestResults = db.hashMap[String, Array[Byte]]("latest-results")
 
   private val ws = new KryoSerialization[Work](system)
   private val rs = new KryoSerialization[AllContentLinksTransfer](system)
 
-  private val running = mutable.HashMap.empty[String, Run] //TODO make it a state
+  private val running = mutable.HashMap.empty[String, Run] //TODO make it a state (keys only), save snapshot
+
+  override def preStart(): Unit = {
+    system.scheduler.schedule(snapshotInterval, snapshotInterval, self, Snapshot)
+  }
 
   override def postStop(): Unit = {
     super.postStop()
@@ -84,8 +89,15 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     db.close()
   }
 
-  def createFor(work: Work, id: String): Run = {
-    val run = new Run(id, work, base.resolve(id).toFile, system, partition)
+  def createFor(runId: String, work: Work): Run = {
+    val run = new Run(runId, work, base.resolve(runId).toFile, system, partition)
+    running.put(run.id, run)
+    run
+  }
+  
+  def loadFor(runId: String, workId: String): Run = {
+    val work = ws.deserialize(works.get(workId))
+    val run = new Run(runId, work, base.resolve(runId).toFile, system, partition)
     running.put(run.id, run)
     run
   }
@@ -95,7 +107,24 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     running(parts.head)
   }
 
-  override def receiveRecover: Receive = { case _ => } //TODO
+  override def receiveRecover: Receive = {
+    
+    case e: Event => e match {
+
+      case RunStarting(runId, workId) =>
+        running.put(runId, loadFor(runId, workId))
+
+      case RunFinished(runId) =>
+        running.remove(runId)
+        
+    }
+
+    case SnapshotOffer(meta, State(runs)) =>
+      runs.foreach(start => running.put(start.runId, loadFor(start.runId, start.workId)))
+
+    case RecoveryCompleted =>
+
+  } 
 
   override def receiveCommand: Receive = {
 
@@ -117,6 +146,10 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     case PublishAll =>
       running.values.foreach(run => run.allTasks.foreach(task => bus.publish(EventBus.NewTasks, task)))
 
+    case Snapshot =>
+      val snapshot = running.map { case (runId, run) => RunStarting(runId, run.work.id) }.toSet
+      saveSnapshot(State(snapshot))
+
   }
 
   def handle: Function[RunJournal.Command, Any] = {
@@ -128,7 +161,7 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
         val runId = Random.alphanumeric.take(16).mkString
         persist(RunJournal.RunStarting(runId, work.id)) { _ =>
           logger.debug(s"New run for work ${work.id} ${work.seed} with task root id $runId")
-          val run = createFor(work, runId)
+          val run = createFor(runId, work)
           run.initialTasks()
           self ! PublishTasks(run)
         }
@@ -187,6 +220,8 @@ object RunJournal {
   case class GetLinks(workId: String) extends Command
 
   case object PublishAll
+  case object Snapshot
+  case class State(runs: Set[RunStarting])
 
 }
 
@@ -210,7 +245,7 @@ case class Run(id: String, work: Work, directory: File, system: ActorSystem, par
     newTasks(Set(work.seed), 0)
 
   val unscheduledTaskTimestamp = -1
-  val separator = "::"
+  val separator = "::" //TODO use everywhere
 
   def newTasks(urls: Set[Url], depth: Int): Set[Task] = {
     val nt = urls.groupBy(partition.apply)
