@@ -13,7 +13,7 @@ import com.typesafe.scalalogging.StrictLogging
 
 import scala.collection.mutable
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: PartitionSelector) extends PersistentActor with StrictLogging {
 
@@ -37,7 +37,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         markFetched(url)
         addToQueue(found)
 
-      case NotFetched(url, _) =>
+      case NotFetched(url) =>
         markFetched(url)
 
     }
@@ -53,17 +53,24 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
     case Next =>
       if (outstanding.isEmpty) finish()
       else {
-        val o = outstanding.head
-        val result =
+        val next = outstanding.head
+
+        val saved =
           for {
-            (fetched, content) <- fetch(o)
-            _ <- repo.save(o.url, o.depth, content)
-          } yield fetched
-        result.onComplete {
-          case Success(fetched) =>
+            result <- fetch(next)
+            saved <- save(next, result)
+          } yield saved
+
+        saved.onComplete {
+          case Success(Some(fetched)) =>
+            logger.trace(s"Fetched ${next.url}")
             self ! fetched
+          case Success(None) =>
+            logger.trace(s"Could not fetch ${next.url}")
+            self ! NotFetched(next)
           case Failure(t) =>
-            self ! NotFetched(o, t)
+            logger.error(s"Could not save ${next.url}", t)
+            self ! NotFetched(next)
         }
       }
 
@@ -73,13 +80,11 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         addToQueue(found)
 
       case fetched @ Fetched(url, found) =>
-        logger.debug(s"Fetched $url")
         markFetched(url)
         addToQueue(found)
         scheduleNext()
 
-      case notFetched @ NotFetched(url, t) =>
-        logger.error(s"Could not fetch $url", t)
+      case notFetched @ NotFetched(url) =>
         markFetched(url)
         scheduleNext()
 
@@ -87,11 +92,21 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   }
 
-  def fetch(link: Link): Future[(Fetched, Content)] = {
+  def fetch(link: Link): Future[Try[(Fetched, Content)]] = {
     logger.trace(s"Requesting ${link.url}")
-    browser.goTo(link.url) { page =>
+    val result = browser.goTo(link.url) { page =>
       logger.trace(s"Processing ${link.url}")
       Fetched(link, Found(link.depth + 1, task.select(link, page))) -> page.renderedContent
+    }
+    result.map(Success.apply).recover { case e => Failure(e) }
+  }
+
+  def save(link: Link, result: Try[(Fetched, Content)]): Future[Option[Fetched]] = {
+    result match {
+      case Success((fetched, content)) =>
+        repo.save(link.url, link.depth, content).map(_ => Some(fetched))
+      case Failure(t) =>
+        repo.save(link.url, link.depth, t).map(_ => None)
     }
   }
 
@@ -135,7 +150,7 @@ object Minion {
   object Event {
     case class Found(depth: Int, urls: Set[Url]) extends Event
     case class Fetched(link: Link, found: Found) extends Event
-    case class NotFetched(link: Link, error: Throwable) extends Event
+    case class NotFetched(link: Link) extends Event
   }
 
   case object Next

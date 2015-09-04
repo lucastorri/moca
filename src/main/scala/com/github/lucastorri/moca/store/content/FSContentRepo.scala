@@ -5,13 +5,15 @@ import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 
 import com.github.lucastorri.moca.browser.Content
 import com.github.lucastorri.moca.role.Task
+import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
-class FSContentRepo(config: Config) extends ContentRepo {
+class FSContentRepo(config: Config, serializer: ContentSerializer) extends ContentRepo {
 
   val base = Paths.get(config.getString("directory")).toAbsolutePath
   base.toFile.mkdirs()
@@ -23,11 +25,11 @@ class FSContentRepo(config: Config) extends ContentRepo {
     FileContentLinksTransfer(repo(task).log.toString)
 
   private def repo(task: Task): FSTaskContentRepo =
-    FSTaskContentRepo(base.resolve(task.id))
+    FSTaskContentRepo(base.resolve(task.id), serializer)
 
 }
 
-case class FSTaskContentRepo(directory: Path) extends TaskContentRepo {
+case class FSTaskContentRepo(directory: Path, serializer: ContentSerializer) extends TaskContentRepo {
 
   directory.toFile.mkdirs()
   val log = directory.resolve("__log")
@@ -39,14 +41,18 @@ case class FSTaskContentRepo(directory: Path) extends TaskContentRepo {
     this
   }
 
-  override def save(url: Url, depth: Int, content: Content): Future[Unit] = {
-    //TODO save status and headers (decide a format, maybe json)
+  override def save(url: Url, depth: Int, content: Try[Content]): Future[Unit] = {
+    val (serialized, hash) = content match {
+      case Success(c) => serializer.serialize(url, c) -> c.hash
+      case Failure(t) => serializer.serialize(url, t) -> ""
+    }
     val file = directory.resolve(url.id)
-    Files.write(file, content.content.array(), StandardOpenOption.CREATE)
-    val logEntry = s"$url|$file|$depth|${content.hash}\n".getBytes(StandardCharsets.UTF_8)
+    Files.write(file, serialized.array(), StandardOpenOption.CREATE)
+    val logEntry = s"$url|$file|$depth|$hash\n".getBytes(StandardCharsets.UTF_8)
     Files.write(log, logEntry, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
     Future.successful(())
   }
+
 
 }
 

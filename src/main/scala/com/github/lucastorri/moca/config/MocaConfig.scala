@@ -14,6 +14,7 @@ import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.content.ContentRepo
+import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -86,9 +87,18 @@ case class MocaConfig(
     build()
   }
 
+  lazy val serializer: ContentSerializer = {
+    val serializerConfig = main.getConfig(main.getString("moca.content-serializer-id"))
+    val build = ClassBuilder.fromConfig(serializerConfig)
+
+    build()
+  }
+
   def contentRepo: ContentRepo = {
     val repoConfig = main.getConfig(main.getString("moca.content-repo-id"))
-    val build = ClassBuilder.fromConfig(repoConfig, classOf[ActorSystem] -> system)
+    val build = ClassBuilder.fromConfig(repoConfig,
+      classOf[ActorSystem] -> system,
+      classOf[ContentSerializer] -> serializer)
 
     build()
   }
@@ -119,15 +129,15 @@ case class MocaConfig(
   }
 
   lazy val scheduler: TaskScheduler = {
-    val providerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
-    val build = ClassBuilder.fromConfig(providerConfig)
+    val schedulerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
+    val build = ClassBuilder.fromConfig(schedulerConfig)
 
     build()
   }
 
   lazy val bus: EventBus = {
-    val providerConfig = main.getConfig(main.getString("moca.event-bus-id"))
-    val build = ClassBuilder.fromConfig(providerConfig)
+    val busConfig = main.getConfig(main.getString("moca.event-bus-id"))
+    val build = ClassBuilder.fromConfig(busConfig)
 
     build()
   }

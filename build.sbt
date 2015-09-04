@@ -18,7 +18,8 @@ libraryDependencies ++= Seq(
   "com.github.scopt" %% "scopt" % "3.3.0",
   "org.mapdb" % "mapdb" % "2.0-beta6",
   "com.esotericsoftware" % "kryo" % "3.0.3",
-  "com.github.crawler-commons" % "crawler-commons" % "0.6")
+  "com.github.crawler-commons" % "crawler-commons" % "0.6",
+  "org.json4s" %% "json4s-jackson" % "3.2.11")
 
 mainClass in assembly := Some("com.github.lucastorri.moca.Moca")
 

@@ -3,7 +3,7 @@ package com.github.lucastorri.moca.browser
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
-case class Content(statusCode: Int, headers: Map[String, Set[String]], content: ByteBuffer, hash: String)
+case class Content(status: Int, headers: Map[String, Set[String]], content: ByteBuffer, hash: String)
 
 object Content {
   

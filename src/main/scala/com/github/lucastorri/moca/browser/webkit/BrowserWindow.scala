@@ -2,7 +2,7 @@ package com.github.lucastorri.moca.browser.webkit
 
 import java.io.StringWriter
 import java.net._
-import java.nio.{ByteBuffer, CharBuffer}
+import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Executors, TimeUnit}
 import javafx.application.Platform
@@ -95,7 +95,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     }
 
     override def renderedContent: Content = {
-      val buffer = settings.charset.newEncoder().encode(CharBuffer.wrap(renderedHtml))
+      val buffer = settings.charset.encode(renderedHtml)
       val entry = BrowserWindow.cache.get(renderedUrl)
           .orElse(BrowserWindow.cache.get(originalUrl))
           .getOrElse(EmptyCacheEntry)

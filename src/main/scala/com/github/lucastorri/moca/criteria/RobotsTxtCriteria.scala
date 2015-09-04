@@ -2,7 +2,6 @@ package com.github.lucastorri.moca.criteria
 
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
-import java.util.Map.Entry
 
 import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.collection.LRUCache
