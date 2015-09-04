@@ -19,7 +19,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, stopOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
+class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 10.seconds
@@ -32,7 +32,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     logger.info("Worker started")
     self ! RequestWork
     mediator ! DistributedPubSubMediator.Subscribe(TasksAvailable.topic, self)
-    if (stopOnMasterUp) bus.subscribe(EventBus.MasterEvents) { e => self ! e }
+    if (holdOnMasterUp) bus.subscribe(EventBus.MasterEvents) { e => self ! e }
   }
 
   override def postStop(): Unit = {
@@ -55,7 +55,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       goto(State.Working) using task
 
     case Event(MasterUp, _) =>
-      goto(State.Stopped)
+      goto(State.OnHold)
 
   }
 
@@ -90,11 +90,11 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       goto(State.Idle) using null
 
     case Event(MasterUp, _) =>
-      goto(State.Stopped) using null
+      goto(State.OnHold) using null
 
   }
 
-  when(State.Stopped) {
+  when(State.OnHold) {
 
     case Event(MasterDown, _) =>
       goto(State.Idle)
@@ -114,12 +114,16 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       logger.info(s"Task ${stateData.id} done")
       self ! RequestWork
 
-    case State.Stopped -> State.Idle =>
+    case State.OnHold -> State.Idle =>
       self ! RequestWork
 
-    case State.Working -> State.Stopped =>
+    case State.Working -> State.OnHold =>
       logger.info(s"Stopping task ${stateData.id}")
       master ! AbortTask(stateData.id)
+
+    case State.Idle -> State.OnHold =>
+      logger.info("Holding worker")
+      
   }
 
   override def unhandled(message: Any): Unit = message match {
@@ -133,15 +137,15 @@ object Worker {
 
   val role = "worker"
 
-  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, stopOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props(new Worker(repo, browserProvider, partition, bus, stopOnMasterUp)), s"worker-$id")
+  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, holdOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(new Worker(repo, browserProvider, partition, bus, holdOnMasterUp)), s"worker-$id")
   }
 
   sealed trait State
   object State {
     case object Working extends State
     case object Idle extends State
-    case object Stopped extends State
+    case object OnHold extends State
   }
 
   case object RequestWork

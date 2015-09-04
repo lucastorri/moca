@@ -6,15 +6,15 @@ import scala.collection.mutable
 
 class UnbufferedEventBus extends EventBus {
 
-  private val subscribers = mutable.HashMap.empty[Topic[_], mutable.HashSet[Function[_, Unit]]]
+  private val subscribers = mutable.HashMap.empty[Topic[_], mutable.ListBuffer[Function[_, Unit]]]
 
   override def publish[T](topic: Topic[T], message: T): Boolean = {
-    val group = subscribers.getOrElse(topic, Set.empty)
+    val group = subscribers.getOrElse(topic, Seq.empty)
     group.foreach(subscriber => subscriber.asInstanceOf[Function[T, Unit]](message))
     group.nonEmpty
   }
 
   override def subscribe[T](topic: Topic[T])(f: (T) => Unit): Unit =
-    subscribers.getOrElseUpdate(topic, mutable.HashSet.empty).add(f)
+    subscribers.getOrElseUpdate(topic, mutable.ListBuffer.empty).append(f)
 
 }
