@@ -48,7 +48,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
     case e: Event => e match {
       case TaskStarted(who, taskId) =>
         state = state.start(who, taskId)
-      case TaskFailed(who, taskId) =>
+      case TaskFailed(who, taskId, _) =>
         state = state.cancel(who, taskId)
       case WorkerDied(who) =>
         state = state.cancel(who)
@@ -80,7 +80,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
                 self ! ws
               case Failure(t) =>
                 logger.error(s"Failed to start task ${ws.taskId} for $who", t)
-                self ! TaskFailed(ws.who, ws.taskId)
+                self ! TaskFailed(ws.who, ws.taskId, recovering = false)
             }
           }
         case None =>
@@ -110,7 +110,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
         toPing.foreach { ongoing =>
           retry(3)(who ? IsInProgress(ongoing.taskId)).acked.onFailure { case t =>
             logger.trace(s"$who is down")
-            self ! TaskFailed(who, ongoing.taskId)
+            self ! TaskFailed(who, ongoing.taskId, firstClean)
           }
         }
         who -> toPing
@@ -122,13 +122,13 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
       deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
-    case fail @ TaskFailed(who, taskId) =>
+    case fail @ TaskFailed(who, taskId, recovering) =>
       logger.info(s"Task $taskId failed")
       persist(fail) { _ =>
         state = state.cancel(who, taskId)
         repo.release(taskId).onComplete {
           case Success(_) =>
-            scheduler.release(taskId)
+            if (!recovering) scheduler.release(taskId)
           case Failure(t) =>
             logger.error(s"Could not release $taskId", t)
         }
@@ -237,7 +237,7 @@ object Master {
   sealed trait Event
   object Event {
     case class TaskStarted(who: ActorRef, taskId: String) extends Event
-    case class TaskFailed(who: ActorRef, taskId: String) extends Event
+    case class TaskFailed(who: ActorRef, taskId: String, recovering: Boolean) extends Event
     case class TaskDone(who: ActorRef, taskId: String) extends Event
     case class WorkerDied(who: ActorRef) extends Event
   }

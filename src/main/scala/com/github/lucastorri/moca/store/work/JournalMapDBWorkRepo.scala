@@ -155,7 +155,7 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     case SaveSnapshotSuccess(meta) =>
       deleteMessages(journalNumberOnSnapshot - 1)
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
-      
+
   }
 
   def handle: Function[RunJournal.Command, Any] = {
