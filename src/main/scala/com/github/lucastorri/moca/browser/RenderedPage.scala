@@ -6,11 +6,13 @@ trait RenderedPage {
 
   def originalUrl: Url
 
-  def currentUrl: Url
+  def renderedUrl: Url
 
-  def content: Content
+  def renderedHtml: String
 
-  def html: String
+  def renderedContent: Content
+
+  def originalContent: Content
 
   def exec(javascript: String): AnyRef
 

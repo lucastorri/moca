@@ -1,9 +1,10 @@
 package com.github.lucastorri.moca.browser.webkit
 
 import java.io.StringWriter
-import java.net.{Proxy, URL, URLConnection, URLStreamHandler, URLStreamHandlerFactory}
-import java.nio.CharBuffer
-import java.util.concurrent.{TimeUnit, Executors}
+import java.net._
+import java.nio.{ByteBuffer, CharBuffer}
+import java.nio.file.Files
+import java.util.concurrent.{Executors, TimeUnit}
 import javafx.application.Platform
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.concurrent.Worker.State
@@ -17,15 +18,17 @@ import javax.xml.transform.stream.StreamResult
 import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
+import com.github.lucastorri.moca.browser.webkit.net._
 import com.github.lucastorri.moca.browser.{BrowserSettings, Content, RenderedPage}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
+import org.apache.commons.io.IOUtils
 
 import scala.collection.mutable
 import scala.compat.Platform.currentTime
+import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
-import scala.concurrent.duration._
 
 class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
 
@@ -71,7 +74,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
 
   case class InternalRenderedPage(originalUrl: Url) extends RenderedPage {
 
-    override def currentUrl: Url =
+    override def renderedUrl: Url =
       Url.parse(webEngine.getLocation).getOrElse(originalUrl)
 
     override def exec(javascript: String): AnyRef = {
@@ -81,12 +84,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       catch { case e: Exception => e }
     }
 
-    override def content: Content = {
-      val buffer = settings.charset.newEncoder().encode(CharBuffer.wrap(html))
-      Content(buffer, "text/html")
-    }
-
-    def html: String = {
+    override def renderedHtml: String = {
       val src = new DOMSource(webEngine.getDocument)
       val writer = new StringWriter()
       val transformer = TransformerFactory.newInstance().newTransformer()
@@ -96,9 +94,24 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       writer.toString
     }
 
+    override def renderedContent: Content = {
+      val buffer = settings.charset.newEncoder().encode(CharBuffer.wrap(renderedHtml))
+      val entry = BrowserWindow.cache.get(renderedUrl)
+          .orElse(BrowserWindow.cache.get(originalUrl))
+          .getOrElse(EmptyCacheEntry)
+
+      Content(entry.status, entry.headers, buffer)
+    }
+
+    override def originalContent: Content = {
+      val entry = BrowserWindow.cache.get(originalUrl)
+        .getOrElse(EmptyCacheEntry)
+
+      Content(entry.status, entry.headers, ByteBuffer.wrap(IOUtils.toByteArray(entry.content)))
+    }
+    
     override def settings: BrowserSettings =
       BrowserWindow.this.settings.base
-
   }
 
   override def compare(that: BrowserWindow): Int =
@@ -117,15 +130,14 @@ object BrowserWindow extends StrictLogging {
   private val pool = mutable.TreeSet.empty[BrowserWindow]
   private val awaiting = mutable.ListBuffer.empty[Promise[BrowserWindow]]
   private val app = Promise[BrowserApplication]()
-
-  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory)
+  private val cache: Cache = new FSCache(Files.createTempDirectory("moca-webkit"), 16384)
+  
+  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory(cache))
   Platform.setImplicitExit(false)
   spawn {
     try BrowserLauncher.launch(WebKitBrowserProvider.settings.headless)
     catch { case e: Exception => logger.error("Could not start browser", e) }
   }
-  Executors.newScheduledThreadPool(1)
-    .scheduleWithFixedDelay(cleaningTask, cleanInterval.toMillis, cleanInterval.toMillis, TimeUnit.MILLISECONDS)
 
   private[browser] def register(view: BrowserApplication): Unit =
     app.success(view)
@@ -159,102 +171,16 @@ object BrowserWindow extends StrictLogging {
     }
   }
 
-}
-
-class MocaURLStreamHandlerFactory extends URLStreamHandlerFactory {
-
-  /*TODO
-   * cache downloaded content, so if criteria selects an image, etc, they can be downloaded from the cache.
-   * Use that to also retrieve the headers of the original request.
-   */
-
-  override def createURLStreamHandler(protocol: String): URLStreamHandler = protocol match {
-    case "http" => new HttpHandler
-    case "https" => new HttpsHandler
-    case _ => null
-  }
+  Executors.newScheduledThreadPool(1)
+    .scheduleWithFixedDelay(cleaningTask, cleanInterval.toMillis, cleanInterval.toMillis, TimeUnit.MILLISECONDS)
 
 }
 
-class HttpHandler extends sun.net.www.protocol.http.Handler with StrictLogging {
 
-  protected override def openConnection(url: URL): URLConnection = {
-    logger.trace(s"Fetching $url")
-    super.openConnection(url)
-  }
 
-  protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
-    logger.trace(s"Fetching $url")
-    super.openConnection(url, proxy)
-  }
 
-}
 
-class HttpsHandler extends sun.net.www.protocol.https.Handler with StrictLogging {
 
-  protected override def openConnection(url: URL): URLConnection = {
-    logger.trace(s"Fetching $url")
-    super.openConnection(url)
-  }
 
-  protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
-    logger.trace(s"Fetching $url")
-    super.openConnection(url, proxy)
-  }
 
-}
 
-  /*
-    URL.setURLStreamHandlerFactory(new URLStreamHandlerFactory() {
-      def createURLStreamHandler(protocol: String): URLStreamHandler = {
-        System.out.println(protocol)
-        if (protocol.matches("http")) {
-          return new Browser#HttpHandler
-        }
-        else if (protocol.matches("https")) {
-          return new Browser#HttpsHandler
-        }
-        return null
-      }
-    })
-
-  private[browser] class HttpHandler extends sun.net.www.protocol.http.Handler {
-    @throws(classOf[IOException])
-    protected override def openConnection(url: URL): URLConnection = {
-      System.out.println(url)
-      return a
-    }
-
-    @throws(classOf[IOException])
-    protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
-      System.out.println(url)
-      return super.openConnection(url, proxy)
-    }
-  }
-
-  private[browser] class HttpsHandler extends sun.net.www.protocol.https.Handler {
-    @throws(classOf[IOException])
-    protected override def openConnection(url: URL): URLConnection = {
-      System.out.println(url)
-      return super.openConnection(url)
-    }
-
-    @throws(classOf[IOException])
-    protected override def openConnection(url: URL, proxy: Proxy): URLConnection = {
-      System.out.println(url)
-      return super.openConnection(url, proxy)
-    }
-  }
-
-  def a: URLConnection = {
-    val handler: InvocationHandler = new InvocationHandler() {
-      @throws(classOf[Throwable])
-      def invoke(proxy: AnyRef, method: Method, args: Array[AnyRef]): AnyRef = {
-        System.out.println(method)
-        return null
-      }
-    }
-    val proxy: URLConnection = java.lang.reflect.Proxy.newProxyInstance(classOf[URLConnection].getClassLoader, Array[Class[_]](classOf[URLConnection]), handler).asInstanceOf[URLConnection]
-    return proxy
-  }
-*/

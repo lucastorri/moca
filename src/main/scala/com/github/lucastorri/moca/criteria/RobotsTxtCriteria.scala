@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Map.Entry
 
 import com.github.lucastorri.moca.browser.RenderedPage
+import com.github.lucastorri.moca.collection.LRUCache
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.worker.Link
 import com.github.lucastorri.moca.url.Url
@@ -49,10 +50,6 @@ object RobotsTxtCriteria extends StrictLogging {
 
     new SimpleRobotRulesParser().parseContent(robots.toString,
       content.getBytes(StandardCharsets.UTF_8), "text/plain", userAgent)
-  }
-
-  case class LRUCache[K, V](maxSize: Int) extends java.util.LinkedHashMap[K, V](16, 0.75f, true) {
-    override def removeEldestEntry(eldest: Entry[K, V]): Boolean = size > maxSize
   }
 
 }
