@@ -11,24 +11,24 @@ import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.event.EventBus.MasterEvents
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.Master.Event.{TaskDone, TaskFailed, TaskStarted, WorkerDied}
-import com.github.lucastorri.moca.role.master.Master.{Event, State}
-import com.github.lucastorri.moca.scheduler.TaskScheduler
+import com.github.lucastorri.moca.role.master.Master._
+import com.github.lucastorri.moca.role.master.scheduler.{TaskScheduler, TaskSchedulerCreator}
+import com.github.lucastorri.moca.role.master.tasks.{TasksHandler, TasksHandlerCreator}
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-//TODO after recovery, might receive commands before the scheduler is updated with the last state
-class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends PersistentActor with StrictLogging {
+class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler: TasksHandlerCreator, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
 
   private val mediator = DistributedPubSub(context.system).mediator
 
-  private var state = State.initial()
+  private var ongoing = newTaskHandler()
+  private var scheduler = newScheduler()
   private var journalNumberOnSnapshot = 0L
   private var firstClean = true
 
@@ -47,110 +47,96 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
   }
 
   override def receiveRecover: Receive = {
+    
+    case SnapshotOffer(meta, State(o, s)) =>
+      logger.info("Using snapshot")
+      ongoing = o
+      scheduler = s
 
     case e: Event => e match {
+
+      case NewTask(task) =>
+        scheduler = scheduler.add(task)
+
       case TaskStarted(who, taskId) =>
-        state = state.start(who, taskId)
-      case TaskFailed(who, taskId, _) =>
-        state = state.cancel(who, taskId)
+        ongoing = ongoing.start(who, taskId)
+        scheduler.next.foreach { case (task, next) =>
+          if (task.id == taskId) {
+            scheduler = next
+          }
+        }
+
+      case TaskFailed(who, taskId) =>
+        ongoing = ongoing.cancel(who, taskId)
+        scheduler = scheduler.release(Set(taskId))
+        
       case WorkerDied(who) =>
-        state = state.cancel(who)
+        val taskIds = ongoing.ongoingTasks(who).map(_.taskId)
+        ongoing = ongoing.cancel(who)
+        scheduler = scheduler.release(taskIds)
+
       case TaskDone(who, taskId) =>
-        state = state.done(who, taskId)
+        ongoing = ongoing.done(who, taskId)
+        scheduler = scheduler.release(Set(taskId))
+        
     }
-    
-    case SnapshotOffer(meta, s: State) =>
-      logger.info("Using snapshot")
-      state = s
     
     case RecoveryCompleted =>
       logger.info("Recovered")
-      logger.trace(s"State is $state")
+      logger.trace(s"State is $ongoing")
       self ! CleanUp
 
   }
 
   override def receiveCommand: Receive = {
 
-    case TaskRequest =>
-      val who = sender()
-      scheduler.next().onComplete {
-        case Success(Some(task)) =>
-          self ! Reply(who, TaskOffer(task))
-        case Success(None) =>
-          who ! Nack
-        case Failure(t) =>
-          logger.error("Failed to retrieve next task", t)
-          who ! Nack
+    case nt @ NewTask(task) =>
+      persist(nt) { _ =>
+        scheduler = scheduler.add(task)
+        mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
       }
 
-    case Reply(who, offer) =>
-      persist(TaskStarted(who, offer.task.id)) { ws =>
-        state = state.start(who, offer.task.id)
-        retry(3)(ws.who ? offer).acked.onComplete {
-          case Success(_) =>
-            self ! ws
-          case Failure(t) =>
-            logger.error(s"Failed to start task ${ws.taskId} for $who", t)
-            self ! TaskFailed(ws.who, ws.taskId, onFirstCleanUp = false)
-        }
+    case TaskRequest =>
+      val who = sender()
+      scheduler.next match {
+        case Some((task, next)) =>
+          persist(TaskStarted(who, task.id)) { _ =>
+            ongoing = ongoing.start(who, task.id)
+            scheduler = next
+            watch(who)
+            retry(3)(who ? TaskOffer(task)).acked.onFailure { case t =>
+              logger.error(s"Failed to send task ${task.id} to worker", t)
+              self ! TaskFailed(who, task.id)
+            }
+          }
+        case None =>
+          who ! Nack
       }
 
     case Terminated(who) =>
       logger.info(s"Worker down: $who")
       persist(WorkerDied(who)) { _ =>
-        val taskIds = state.get(who).map(_.taskId)
-        repo.releaseAll(taskIds).onComplete {
-          case Success(_) =>
-            scheduler.release(taskIds.toSeq: _*)
-          case Failure(t) =>
-            logger.error("Could not release worker tasks", t)
+        val taskIds = ongoing.ongoingTasks(who).map(_.taskId)
+        repo.releaseAll(taskIds).onFailure { case t =>
+          logger.error("Could not release worker tasks", t)
         }
-        state = state.cancel(who)
+        ongoing = ongoing.cancel(who)
+        scheduler = scheduler.release(taskIds)
       }
 
-    case CleanUp =>
-      logger.trace("Clean up")
-      journalNumberOnSnapshot = lastSequenceNr
-      if (!firstClean) saveSnapshot(state)
-
-      val toExtend = state.ongoingTasks.map { case (who, all) =>
-        val toPing = all.filter(_.shouldPing || firstClean)
-        toPing.foreach { ongoing =>
-          retry(3)(who ? IsInProgress(ongoing.taskId)).acked.onFailure { case t =>
-            logger.trace(s"$who is down")
-            self ! TaskFailed(who, ongoing.taskId, firstClean)
-          }
-        }
-        who -> toPing
-      }
-      state = state.extendDeadline(toExtend)
-      firstClean = false
-
-    case SaveSnapshotSuccess(meta) =>
-      deleteMessages(journalNumberOnSnapshot - 1)
-      deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
-
-    case fail @ TaskFailed(who, taskId, onFirstCleanUp) =>
+    case fail @ TaskFailed(who, taskId) =>
       logger.info(s"Task $taskId failed")
       persist(fail) { _ =>
-        state = state.cancel(who, taskId)
-        repo.release(taskId).onComplete {
-          case Success(_) =>
-            if (!onFirstCleanUp) scheduler.release(taskId)
-          case Failure(t) =>
-            logger.error(s"Could not release $taskId", t)
+        ongoing = ongoing.cancel(who, taskId)
+        scheduler = scheduler.release(Set(taskId))
+        repo.release(taskId).onFailure { case t =>
+          logger.error(s"Could not release $taskId", t)
         }
       }
 
     case AbortTask(taskId) =>
-      self ! TaskFailed(sender(), taskId, onFirstCleanUp = false)
+      self ! TaskFailed(sender(), taskId)
       sender() ! Ack
-
-    case TaskStarted(who, taskId) =>
-      logger.info(s"Task $taskId started")
-      state = state.start(who, taskId)
-      watch(who)
 
     case TaskFinished(taskId, transfer) =>
       logger.info(s"Task $taskId done")
@@ -158,18 +144,40 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
       repo.done(taskId, transfer).onComplete {
         case Success(finishedWorkId) =>
           finishedWorkId.foreach(id => logger.info(s"Finished run on work $id"))
-          scheduler.release(taskId)
           who ! Ack
-          self ! Done(taskId, who)
+          self ! TaskDone(who, taskId)
         case Failure(t) =>
           logger.error(s"Could not mark $taskId done", t)
           who ! Nack
       }
 
-    case Done(taskId, who) =>
-      persist(TaskDone(who, taskId)) { _ =>
-        state = state.done(who, taskId)
+    case done @ TaskDone(who, taskId) =>
+      persist(done) { _ =>
+        ongoing = ongoing.done(who, taskId)
+        scheduler = scheduler.release(Set(taskId))
       }
+
+    case CleanUp =>
+      logger.trace("Clean up")
+      journalNumberOnSnapshot = lastSequenceNr
+      if (!firstClean) saveSnapshot(State(ongoing, scheduler))
+
+      val toExtend = ongoing.ongoingTasks().map { case (who, all) =>
+        val toPing = all.filter(_.shouldPing || firstClean)
+        toPing.foreach { ongoing =>
+          retry(3)(who ? IsInProgress(ongoing.taskId)).acked.onFailure { case t =>
+            logger.trace(s"$who is down")
+            self ! TaskFailed(who, ongoing.taskId)
+          }
+        }
+        who -> toPing
+      }
+      ongoing = ongoing.extendDeadline(toExtend)
+      firstClean = false
+
+    case SaveSnapshotSuccess(meta) =>
+      deleteMessages(journalNumberOnSnapshot - 1)
+      deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case ConsistencyCheck =>
       //TODO it might receive later on a Finished for a task that wasn't persisted, on that case, trigger this
@@ -206,10 +214,6 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
           who ! Nack
       }
 
-    case NewTask(task) =>
-      scheduler.add(task)
-      mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
-
   }
 
   override def unhandled(message: Any): Unit = message match {
@@ -223,10 +227,7 @@ class Master(repo: WorkRepo, scheduler: TaskScheduler, bus: EventBus) extends Pe
   override def snapshotPluginId: String = system.settings.config.getString("moca.master.snapshot-plugin-id")
 
   case object CleanUp
-  case class Done(taskId: String, who: ActorRef)
-  case class NewTask(task: Task)
-  case class Reply(who: ActorRef, offer: TaskOffer)
-
+  
 }
 
 object Master {
@@ -243,74 +244,19 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(work: => WorkRepo, scheduler: => TaskScheduler, bus: EventBus)(implicit system: ActorSystem): Unit = {
+  def standBy(repo: => WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler: TasksHandlerCreator, bus: EventBus)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
-    val manager = ClusterSingletonManager.props(Props(new Master(work, scheduler, bus)), PoisonPill, settings)
+    val manager = ClusterSingletonManager.props(Props(new Master(repo, newScheduler, newTaskHandler, bus)), PoisonPill, settings)
     system.actorOf(manager, name)
   }
 
   sealed trait Event
-  object Event {
-    case class TaskStarted(who: ActorRef, taskId: String) extends Event
-    case class TaskFailed(who: ActorRef, taskId: String, onFirstCleanUp: Boolean) extends Event
-    case class TaskDone(who: ActorRef, taskId: String) extends Event
-    case class WorkerDied(who: ActorRef) extends Event
-  }
+  case class NewTask(task: Task) extends Event
+  case class TaskStarted(who: ActorRef, taskId: String) extends Event
+  case class TaskFailed(who: ActorRef, taskId: String) extends Event
+  case class TaskDone(who: ActorRef, taskId: String) extends Event
+  case class WorkerDied(who: ActorRef) extends Event
 
-
-  case class State(ongoingTasks: Map[ActorRef, Set[OngoingTask]]) {
-
-    def start(who: ActorRef, taskId: String): State = {
-      val entry = who -> (get(who) + create(taskId))
-      copy(ongoingTasks = ongoingTasks + entry)
-    }
-
-    def cancel(who: ActorRef, taskId: String): State = {
-      val taskSet = get(who) - create(taskId)
-      val ongoing =
-        if (taskSet.isEmpty) ongoingTasks - who
-        else ongoingTasks + (who -> taskSet)
-      copy(ongoingTasks = ongoing)
-    }
-
-    def cancel(who: ActorRef): State =
-      copy(ongoingTasks = ongoingTasks - who)
-
-    def get(who: ActorRef): Set[OngoingTask] =
-      ongoingTasks.getOrElse(who, Set.empty)
-
-    def extendDeadline(toExtend: Map[ActorRef, Set[OngoingTask]]): State = {
-      val updates = toExtend.mapValues(_.map(ongoing => create(ongoing.taskId)))
-      copy(ongoingTasks = ongoingTasks ++ updates)
-    }
-
-    def done(who: ActorRef, taskId: String): State =
-      cancel(who, taskId)
-
-    private def create(taskId: String): OngoingTask =
-      OngoingTask(taskId, Deadline.now + Master.pingInterval)
-
-  }
-
-  object State {
-
-    def initial(): State =
-      State(Map.empty)
-
-  }
-
-  case class OngoingTask(taskId: String, nextPing: Deadline) {
-
-    override def equals(obj: scala.Any): Boolean = obj match {
-      case other: OngoingTask => other.taskId == taskId
-      case _ => false
-    }
-
-    override def hashCode: Int = taskId.hashCode()
-
-    def shouldPing: Boolean = nextPing.isOverdue()
-
-  }
-
+  case class State(ongoing: TasksHandler, scheduler: TaskScheduler)
 
 }

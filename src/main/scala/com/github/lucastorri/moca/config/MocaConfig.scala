@@ -11,8 +11,9 @@ import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
+import com.github.lucastorri.moca.role.master.tasks.TasksHandlerCreator
 import com.github.lucastorri.moca.role.worker.Worker
-import com.github.lucastorri.moca.scheduler.TaskScheduler
+import com.github.lucastorri.moca.role.master.scheduler.{TaskSchedulerCreator, TaskScheduler}
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.store.work.WorkRepo
@@ -128,8 +129,15 @@ case class MocaConfig(
       baseConfig.getString("user-agent"))
   }
 
-  lazy val scheduler: TaskScheduler = {
+  lazy val scheduler: TaskSchedulerCreator = {
     val schedulerConfig = main.getConfig(main.getString("moca.task-scheduler-id"))
+    val build = ClassBuilder.fromConfig(schedulerConfig)
+
+    build()
+  }
+
+  lazy val tasksHandler: TasksHandlerCreator = {
+    val schedulerConfig = main.getConfig(main.getString("moca.task-handler-id"))
     val build = ClassBuilder.fromConfig(schedulerConfig)
 
     build()

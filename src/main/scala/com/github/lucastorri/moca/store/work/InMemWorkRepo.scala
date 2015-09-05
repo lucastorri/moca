@@ -2,7 +2,7 @@ package com.github.lucastorri.moca.store.work
 
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
-import com.github.lucastorri.moca.scheduler.TaskScheduler
+import com.github.lucastorri.moca.role.master.scheduler.TaskScheduler
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
