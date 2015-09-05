@@ -55,17 +55,21 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
     }
   }
 
-  private def transaction[T](persistenceId: String, commit: Boolean = true)(f: DBUnit => T): Future[T] = Future {
-    val db = DBUnit(persistenceId)
-    val result = f(db)
-    if (commit) db.commit()
-    db.close()
-    result
+  private def transaction[T](persistenceId: String, commit: Boolean = true)(f: DBUnit => T): Future[T] = {
+    try {
+      val db = DBUnit(persistenceId)
+      val result = f(db)
+      if (commit) db.commit()
+      db.close()
+      Future.successful(result)
+    } catch {
+      case e: Exception => Future.failed(e)
+    }
   }
 
   private case class DBUnit(persistenceId: String) extends KryoSerialization[CustomPersistentRepr](system) {
 
-    private val db = DBMaker
+    private lazy val db = DBMaker
       .appendFileDB(base.resolve(persistenceId).toFile)
       .closeOnJvmShutdown()
       .fileMmapEnableIfSupported()
