@@ -180,8 +180,7 @@ class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler:
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case ConsistencyCheck =>
-      //TODO it might receive later on a Finished for a task that wasn't persisted, on that case, trigger this
-      //TODO check if any work that was made available is not on the current state
+      //TODO check for discrepancies between repo and state
       sender() ! Ack
 
     case AddWork(seeds) =>
