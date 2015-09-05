@@ -115,12 +115,11 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   }
 
   override def compare(that: BrowserWindow): Int =
-    this.lastUsed.compareTo(that.lastUsed)
+    that.lastUsed.compareTo(this.lastUsed)
 
   def close(): Unit = {
     stage.close()
   }
-
 
 }
 
