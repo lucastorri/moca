@@ -83,7 +83,7 @@ class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler:
     
     case RecoveryCompleted =>
       logger.info("Recovered")
-      logger.trace(s"State is $ongoing")
+      logger.trace(s"State is $ongoing + $scheduler")
       self ! CleanUp
 
   }

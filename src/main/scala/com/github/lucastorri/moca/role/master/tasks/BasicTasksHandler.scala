@@ -15,7 +15,7 @@ case class BasicTasksHandler(ongoing: Map[ActorRef, Set[OngoingTask]]) extends T
     ongoing.getOrElse(who, Set.empty)
 
   override def start(who: ActorRef, taskId: String): BasicTasksHandler = {
-    val entry = who -> (ongoing(who) + create(taskId))
+    val entry = who -> (ongoingTasks(who) + create(taskId))
     copy(ongoing = ongoing + entry)
   }
 
