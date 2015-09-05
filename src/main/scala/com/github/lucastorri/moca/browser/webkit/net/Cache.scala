@@ -1,15 +1,15 @@
 package com.github.lucastorri.moca.browser.webkit.net
 
 import java.io.InputStream
-import java.net.URLStreamHandlerFactory
+import java.net.URLConnection
 
 import com.github.lucastorri.moca.url.Url
 
 trait Cache {
 
-  def get(url: Url): Option[CacheEntry]
+  def apply(conn: URLConnection): URLConnection
 
-  def urlStreamHandlerFactory: URLStreamHandlerFactory
+  def get(url: Url): Option[CacheEntry]
 
 }
 

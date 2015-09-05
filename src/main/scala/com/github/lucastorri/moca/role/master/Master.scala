@@ -78,7 +78,8 @@ class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler:
       case TaskDone(who, taskId) =>
         ongoing = ongoing.done(who, taskId)
         scheduler = scheduler.release(Set(taskId))
-        
+
+        //TODO restarting not working
     }
     
     case RecoveryCompleted =>

@@ -131,7 +131,7 @@ object BrowserWindow extends StrictLogging {
   private val app = Promise[BrowserApplication]()
   private val cache: Cache = new FSCache(Files.createTempDirectory("moca-webkit"), 16384)
   
-  URL.setURLStreamHandlerFactory(cache.urlStreamHandlerFactory)
+  URL.setURLStreamHandlerFactory(new MocaURLStreamHandlerFactory(cache))
   Platform.setImplicitExit(false)
   spawn {
     try BrowserLauncher.launch(WebKitBrowserProvider.settings.headless)
