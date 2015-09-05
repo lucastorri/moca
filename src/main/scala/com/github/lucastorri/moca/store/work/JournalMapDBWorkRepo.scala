@@ -229,8 +229,10 @@ object RunJournal {
 
 case class Run(id: String, work: Work, directory: Path, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
 
+  private val file = directory.resolve(id).toFile
+
   private val db = DBMaker
-    .appendFileDB(directory.resolve(id).toFile)
+    .appendFileDB(file)
     .closeOnJvmShutdown()
     .cacheLRUEnable()
     .make()
@@ -312,7 +314,7 @@ case class Run(id: String, work: Work, directory: Path, system: ActorSystem, par
 
   def close(): Unit = {
     db.close()
-    directory.delete()
+    file.delete()
   }
 
 }

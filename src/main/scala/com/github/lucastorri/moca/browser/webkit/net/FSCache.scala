@@ -18,7 +18,9 @@ class FSCache(dir: Path, cacheSize: Int) extends Cache with StrictLogging {
   logger.debug(s"Caching files in $dir")
   dir.toFile.mkdirs()
 
-  private[this] val lru = LRUCache[String, FilePair](cacheSize) //TODO remove files when out of the lru
+  private[this] val lru = LRUCache.withAction[String, FilePair](cacheSize) { (url, files) =>
+    files.delete()
+  }
 
   override def apply(conn: URLConnection): URLConnection = synchronized {
 

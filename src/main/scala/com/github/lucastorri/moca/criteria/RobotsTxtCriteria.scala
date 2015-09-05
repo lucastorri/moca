@@ -27,7 +27,7 @@ object RobotsTxtCriteria extends StrictLogging {
 
   val defaultCacheSize = 1024
 
-  private[RobotsTxtCriteria] val cache = LRUCache[String, BaseRobotRules](defaultCacheSize)
+  private[RobotsTxtCriteria] val cache = LRUCache.ofSize[String, BaseRobotRules](defaultCacheSize)
 
   private[RobotsTxtCriteria] def get(url: Url, userAgent: String): BaseRobotRules =
     cache.getOrElseUpdate(url.root.toString, fetch(url, userAgent))
