@@ -89,14 +89,14 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
   }
 
   def createFor(runId: String, work: Work): Run = {
-    val run = new Run(runId, work, base.resolve(runId).toFile, system, partition)
+    val run = new Run(runId, work, base, system, partition)
     running.put(run.id, run)
     run
   }
   
   def loadFor(runId: String, workId: String): Run = {
     val work = ws.deserialize(works.get(workId))
-    val run = new Run(runId, work, base.resolve(runId).toFile, system, partition)
+    val run = new Run(runId, work, base, system, partition)
     running.put(run.id, run)
     run
   }
@@ -106,6 +106,7 @@ class RunJournal(config: Config, partition: PartitionSelector, bus: EventBus) ex
     running(parts.head)
   }
 
+  //TODO don't need journal! then nor the actor
   override def receiveRecover: Receive = {
     
     case e: Event => e match {
@@ -226,10 +227,10 @@ object RunJournal {
 
 }
 
-case class Run(id: String, work: Work, directory: File, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
+case class Run(id: String, work: Work, directory: Path, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
 
   private val db = DBMaker
-    .appendFileDB(directory)
+    .appendFileDB(directory.resolve(id).toFile)
     .closeOnJvmShutdown()
     .cacheLRUEnable()
     .make()
