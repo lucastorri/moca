@@ -156,26 +156,24 @@ case class Run(id: String, work: Work, directory: Path, system: ActorSystem, par
   private val ts = new KryoSerialization[Task](system)
   private val cs = new KryoSerialization[ContentLink](system)
 
-  def initialTasks(): Set[Task] =
+  def initialTasks(): Unit =
     newTasks(Set(work.seed), 0)
 
   val unscheduledTaskTimestamp = -1
 
-  def newTasks(urls: Set[Url], depth: Int): Set[Task] = {
-    val nt = urls.groupBy(partition.apply)
+  def newTasks(urls: Set[Url], depth: Int): Unit = {
+    urls.groupBy(partition.apply)
       .mapValues(group => group.filter(url => depth < depths.getOrElse(url, Int.MaxValue)))
       .filter { case (_, group) => group.nonEmpty }
-      .map { case (part, group) =>
+      .foreach { case (part, group) =>
         val taskId = s"$id${Run.idSeparator}${Run.mkId(Run.taskIdSize)}"
         val task = Task(taskId, group, work.criteria, depth, part)
         group.foreach(url => depths.put(url, depth))
         tasks.put(taskId, ts.serialize(task))
         taskPublishTimestamp.put(taskId, unscheduledTaskTimestamp)
         logger.debug(s"New task $taskId for work ${work.id}")
-        task
       }
     db.commit()
-    nt.toSet
   }
 
   def unpublishedTasks: Set[Task] = {
@@ -198,10 +196,12 @@ case class Run(id: String, work: Work, directory: Path, system: ActorSystem, par
     unpublished.toSet
   }
 
-  def release(taskId: String): Task = {
-    taskPublishTimestamp.put(taskId, unscheduledTaskTimestamp)
-    db.commit()
-    ts.deserialize(tasks.get(taskId))
+  def release(taskId: String): Unit = {
+    if (tasks.containsKey(taskId)) {
+      taskPublishTimestamp.put(taskId, unscheduledTaskTimestamp)
+      db.commit()
+      ts.deserialize(tasks.get(taskId))
+    }
   }
 
   def complete(taskId: String, transfer: ContentLinksTransfer): Unit = {
