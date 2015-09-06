@@ -92,6 +92,7 @@ class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler:
   override def receiveCommand: Receive = {
 
     case nt @ NewTask(task) =>
+      logger.trace(s"New task ${task.id}")
       persist(nt) { _ =>
         scheduler = scheduler.add(task)
         mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)

@@ -47,12 +47,18 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
   }
 
 
-  private def transaction[T](persistenceId: String)(f: => DBUnit => T): Future[T] = Future {
-    val db = DBUnit(persistenceId)
-    val result = f(db)
-    db.commit()
-    db.close()
-    result
+  private def transaction[T](persistenceId: String)(f: => DBUnit => T): Future[T] = {
+    var db: DBUnit = null
+    try {
+      db = DBUnit(persistenceId)
+      val result = f(db)
+      db.commit()
+      db.close()
+      Future.successful(result)
+    } catch { case e: Exception =>
+      if (db != null) db.roolback()
+      Future.failed(e)
+    }
   }
 
   private case class DBUnit(persistenceId: String) extends KryoSerialization[SnapshotContainer](system) {
@@ -86,6 +92,9 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
 
     def commit(): Unit =
       db.commit()
+
+    def roolback(): Unit =
+      db.rollback()
 
     def close(): Unit =
       db.close()

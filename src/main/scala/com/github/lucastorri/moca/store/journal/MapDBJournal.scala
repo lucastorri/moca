@@ -56,14 +56,16 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
   }
 
   private def transaction[T](persistenceId: String, commit: Boolean = true)(f: DBUnit => T): Future[T] = {
+    var db: DBUnit = null
     try {
-      val db = DBUnit(persistenceId)
+      db = DBUnit(persistenceId)
       val result = f(db)
       if (commit) db.commit()
       db.close()
       Future.successful(result)
-    } catch {
-      case e: Exception => Future.failed(e)
+    } catch { case e: Exception =>
+      if (db != null) db.roolback()
+      Future.failed(e)
     }
   }
 
@@ -97,6 +99,9 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
 
     def commit(): Unit =
       db.commit()
+
+    def roolback(): Unit =
+      db.rollback()
 
     def close(): Unit =
       db.close()
