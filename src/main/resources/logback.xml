@@ -7,6 +7,8 @@
 
     <logger name="com.github.lucastorri.moca.browser.webkit" level="INFO" />
 
+    <logger name="com.github.lucastorri.moca.role.worker" level="DEBUG" />
+
 
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
