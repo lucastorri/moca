@@ -1,6 +1,7 @@
 package com.github.lucastorri.moca.url
 
-import java.net.URL
+import java.net.{URL => JavaURL}
+import io.mola.galimatias.{URL => NormalizedURL}
 import java.security.MessageDigest
 
 import crawlercommons.url.EffectiveTldFinder
@@ -10,7 +11,7 @@ import scala.util.Try
 class Url private[Url](override val toString: String) extends Serializable {
 
   @transient
-  private[this] lazy val _url = new URL(toString)
+  private[this] lazy val _url = NormalizedURL.parse(toString)
 
   def id: String =
     MessageDigest.getInstance("SHA1")
@@ -19,23 +20,19 @@ class Url private[Url](override val toString: String) extends Serializable {
       .mkString
 
   def host: String =
-    _url.getHost
+    _url.host().toString
 
   def domain: String =
     EffectiveTldFinder.getAssignedDomain(host)
 
   def protocol: String =
-    _url.getProtocol
+    _url.scheme()
 
   def port: Int =
-    _url.getPort match {
-      case -1 if protocol == "http" => 80
-      case -1 if protocol == "https" => 443
-      case n => n
-    }
+    _url.port()
 
   def resolve(path: String): Url =
-    Url(new URL(_url, path).toString)
+    Url(_url.resolve(path).toString)
 
   def root: Url =
     resolve("/")
@@ -48,8 +45,8 @@ class Url private[Url](override val toString: String) extends Serializable {
     case _ => false
   }
 
-  def toURL: URL =
-    _url
+  def toURL: JavaURL =
+    _url.toJavaURL
 
 }
 
@@ -60,16 +57,21 @@ object Url {
       case -1 => url
       case n => url.substring(0, n)
     }
-    new Url(test(cleaned).toURI.normalize().toString)
+    new Url(normalizeAndTest(cleaned).toString)
   }
 
   def parse(url: String): Option[Url] =
     Try(apply(url)).toOption
 
   def isValid(url: String): Boolean =
-    Try(test(url)).isSuccess
+    Try(normalizeAndTest(url)).isSuccess
 
-  private def test(url: String): URL =
-    new URL(url)
+  private def normalizeAndTest(url: String): NormalizedURL = {
+    val cleaned = url.indexOf('#') match {
+      case -1 => url
+      case n => url.substring(0, n)
+    }
+    NormalizedURL.parse(cleaned)
+  }
 
 }
