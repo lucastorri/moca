@@ -8,10 +8,10 @@ scalacOptions := Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "2.2.5" % "test",
-  "com.typesafe.akka" %% "akka-remote" % "2.4.0-RC1",
-  "com.typesafe.akka" %% "akka-cluster-sharding" % "2.4.0-RC1",
-  "com.typesafe.akka" %% "akka-contrib" % "2.4.0-RC1",
-  "com.typesafe.akka" %% "akka-distributed-data-experimental" % "2.4.0-RC1",
+  "com.typesafe.akka" %% "akka-remote" % "2.4-SNAPSHOT",
+  "com.typesafe.akka" %% "akka-cluster-sharding" % "2.4-SNAPSHOT",
+  "com.typesafe.akka" %% "akka-contrib" % "2.4-SNAPSHOT",
+  "com.typesafe.akka" %% "akka-distributed-data-experimental" % "2.4-SNAPSHOT",
   "org.testfx" % "openjfx-monocle" % "1.8.0_20",
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
@@ -21,6 +21,9 @@ libraryDependencies ++= Seq(
   "com.github.crawler-commons" % "crawler-commons" % "0.6",
   "org.json4s" %% "json4s-jackson" % "3.2.11",
   "io.mola.galimatias" % "galimatias" % "0.2.0")
+
+resolvers ++= Seq(
+  "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/")
 
 mainClass in assembly := Some("com.github.lucastorri.moca.Moca")
 
