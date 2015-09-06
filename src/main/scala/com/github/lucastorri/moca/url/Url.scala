@@ -52,13 +52,8 @@ class Url private[Url](override val toString: String) extends Serializable {
 
 object Url {
 
-  def apply(url: String): Url = {
-    val cleaned = url.indexOf('#') match {
-      case -1 => url
-      case n => url.substring(0, n)
-    }
-    new Url(normalizeAndTest(cleaned).toString)
-  }
+  def apply(url: String): Url =
+    new Url(normalizeAndTest(url).toString)
 
   def parse(url: String): Option[Url] =
     Try(apply(url)).toOption
@@ -67,11 +62,17 @@ object Url {
     Try(normalizeAndTest(url)).isSuccess
 
   private def normalizeAndTest(url: String): NormalizedURL = {
-    val cleaned = url.indexOf('#') match {
-      case -1 => url
-      case n => url.substring(0, n)
+    try {
+      val cleaned = url.indexOf('#') match {
+        case -1 => url
+        case n => url.substring(0, n)
+      }
+      NormalizedURL.parse(cleaned)
+    } catch {
+      case e: Exception => throw InvalidUrlException(url, e)
     }
-    NormalizedURL.parse(cleaned)
   }
 
 }
+
+case class InvalidUrlException(url: String, e: Exception) extends Exception(s"Invalid url $url", e)
