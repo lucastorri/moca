@@ -5,6 +5,8 @@
 
     <logger name="crawlercommons" level="INFO" />
 
+    <logger name="com.github.lucastorri.moca.browser.webkit" level="INFO" />
+
 
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
