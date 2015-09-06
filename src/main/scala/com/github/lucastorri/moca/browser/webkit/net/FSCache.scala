@@ -69,21 +69,23 @@ case class FilePair(dir: Path, name: String) {
 
 case class CachedURLConnection(conn: HttpURLConnection, files: FilePair) extends HttpURLConnection(conn.getURL) {
 
-  override def connect(): Unit = {
-    conn.connect()
-    val header = getHeaderFields
-    val status = header.get(null).mkString
-    val fields = (header - null).flatMap { case (field, values) => values.map(v => s"$field: $v") }.mkString("\n")
-    val serialized = s"$status\n$fields".getBytes(StandardCharsets.UTF_8)
-    Files.write(files.headersFile, serialized, StandardOpenOption.CREATE)
-  }
-  
   override def getInputStream: InputStream = {
     var in = conn.getInputStream
     if (in != null) in = new InterceptedInputStream(in, new FileOutputStream(files.contentFile.toFile, true))
     else files.contentFile.toFile.createNewFile()
+
+    val header = getHeaderFields
+    if (header != null) {
+      val status = header.get(null).mkString
+      val fields = (header - null).flatMap { case (field, values) => values.map(v => s"$field: $v") }.mkString("\n")
+      val serialized = s"$status\n$fields".getBytes(StandardCharsets.UTF_8)
+      Files.write(files.headersFile, serialized, StandardOpenOption.CREATE)
+    }
+
     in
   }
+
+  override def connect(): Unit = conn.connect()
 
   override def getResponseCode: Int = conn.getResponseCode
 
