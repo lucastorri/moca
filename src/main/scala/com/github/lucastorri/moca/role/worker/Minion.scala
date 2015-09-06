@@ -63,10 +63,10 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
         saved.onComplete {
           case Success(Some(fetched)) =>
-            logger.trace(s"Fetched ${next.url} at depth ${next.depth}")
+            logger.debug(s"Fetched ${next.url} at depth ${next.depth}")
             self ! fetched
           case Success(None) =>
-            logger.trace(s"Could not fetch ${next.url}")
+            logger.debug(s"Could not fetch ${next.url}")
             self ! NotFetched(next)
           case Failure(t) =>
             logger.error(s"Could not save ${next.url}", t)
