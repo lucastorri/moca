@@ -1,5 +1,6 @@
 package com.github.lucastorri.moca.store.content
 
+import java.io.{DataInputStream, DataOutputStream, FileInputStream, FileOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 
@@ -9,7 +10,6 @@ import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 
-import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
@@ -32,6 +32,7 @@ class FSContentRepo(config: Config, serializer: ContentSerializer) extends Conte
 case class FSTaskContentRepo(directory: Path, serializer: ContentSerializer) extends TaskContentRepo {
 
   directory.toFile.mkdirs()
+  val charset = StandardCharsets.UTF_8
   val log = directory.resolve("__log")
   lazy val seeds = directory.resolve("__seeds")
 
@@ -48,21 +49,37 @@ case class FSTaskContentRepo(directory: Path, serializer: ContentSerializer) ext
     }
     val file = directory.resolve(url.id)
     Files.write(file, serialized.array(), StandardOpenOption.CREATE)
-    val logEntry = s"$url|$file|$depth|$hash\n".getBytes(StandardCharsets.UTF_8)
-    Files.write(log, logEntry, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+
+    val data = new DataOutputStream(new FileOutputStream(log.toFile, true))
+    data.writeInt(depth)
+    data.writeUTF(url.toString)
+    data.writeUTF(file.toString)
+    data.writeUTF(hash.toString)
+    data.flush()
+    data.close()
     Future.successful(())
   }
-
 
 }
 
 case class FileContentLinksTransfer(log: String) extends ContentLinksTransfer {
 
+  val data = new DataInputStream(new FileInputStream(Paths.get(log).toFile))
+
   override def contents: Stream[ContentLink] = {
-    Files.readAllLines(Paths.get(log)).asScala.toStream.map { line =>
-      val Array(url, link, depth, hash) = line.split("\\|")
-      ContentLink(Url(url), link, depth.toInt, hash)
+    val data = new DataInputStream(new FileInputStream(Paths.get(log).toFile))
+    def next: Stream[ContentLink] = {
+      if (data.available() <= 0) Stream.empty
+      else Stream {
+        val depth = data.readInt()
+        val url = Url(data.readUTF())
+        val file = data.readUTF()
+        val hash = data.readUTF()
+
+        ContentLink(url, file, depth, hash)
+      } #::: next
     }
+    next
   }
 
 }
