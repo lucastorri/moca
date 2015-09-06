@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.url
 
-import java.net.{URI, URL}
+import java.net.URL
 import java.security.MessageDigest
 
 import crawlercommons.url.EffectiveTldFinder
@@ -10,7 +10,7 @@ import scala.util.Try
 class Url private[Url](override val toString: String) extends Serializable {
 
   @transient
-  private[this] lazy val _uri = new URI(toString)
+  private[this] lazy val _url = new URL(toString)
 
   def id: String =
     MessageDigest.getInstance("SHA1")
@@ -19,23 +19,23 @@ class Url private[Url](override val toString: String) extends Serializable {
       .mkString
 
   def host: String =
-    _uri.getHost
+    _url.getHost
 
   def domain: String =
     EffectiveTldFinder.getAssignedDomain(host)
 
   def protocol: String =
-    _uri.getScheme
+    _url.getProtocol
 
   def port: Int =
-    _uri.getPort match {
+    _url.getPort match {
       case -1 if protocol == "http" => 80
       case -1 if protocol == "https" => 443
       case n => n
     }
 
   def resolve(path: String): Url =
-    Url(_uri.resolve(path).toString)
+    Url(new URL(_url, path).toString)
 
   def root: Url =
     resolve("/")
@@ -49,7 +49,7 @@ class Url private[Url](override val toString: String) extends Serializable {
   }
 
   def toURL: URL =
-    _uri.toURL
+    _url
 
 }
 
