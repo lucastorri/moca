@@ -61,4 +61,10 @@ class UrlTest extends FlatSpec with MustMatchers {
 
   }
 
+  it must "remove trailing ?" in {
+
+    Url("http://www.example.com/a?").toString must equal ("http://www.example.com/a?")
+
+  }
+
 }
