@@ -192,6 +192,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
           who ! Ack
         case Failure(t) =>
           logger.error("Could not add seeds", t)
+          who ! Nack
       }
 
     case AddSubTask(taskId, depth, urls) =>
