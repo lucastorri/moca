@@ -1,6 +1,5 @@
 package com.github.lucastorri.moca.browser.webkit
 
-import java.io.StringWriter
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -13,9 +12,6 @@ import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 import javafx.scene.web.WebView
 import javafx.stage.Stage
-import javax.xml.transform.dom.DOMSource
-import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.browser.webkit.net._
@@ -38,6 +34,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
   private var lastUsed = 0L
+  private var html = ""
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -48,6 +45,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
       if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
+        html = webEngine.executeScript("document.documentElement.outerHTML").toString
       }
     }
   })
@@ -86,15 +84,8 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       catch { case e: Exception => e }
     }
 
-    override def renderedHtml: String = {
-      val src = new DOMSource(webEngine.getDocument)
-      val writer = new StringWriter()
-      val transformer = TransformerFactory.newInstance().newTransformer()
-      transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
-      transformer.transform(src, new StreamResult(writer))
-      writer.flush()
-      writer.toString
-    }
+    override def renderedHtml: String =
+      html
 
     override def renderedContent: Content = {
       val buffer = settings.charset.encode(renderedHtml)
