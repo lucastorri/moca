@@ -3,14 +3,18 @@ package com.github.lucastorri.moca.browser.webkit
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.util
+import java.util.Collections
 import java.util.concurrent.{Executors, TimeUnit}
 import javafx.application.Platform
 import javafx.beans.value.{ChangeListener, ObservableValue}
+import javafx.collections.ListChangeListener
+import javafx.collections.ListChangeListener.Change
 import javafx.concurrent.Worker.State
 import javafx.concurrent.{Worker => JFXWorker}
 import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
-import javafx.scene.web.WebView
+import javafx.scene.web.{WebHistory, WebView}
 import javafx.stage.Stage
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
@@ -25,6 +29,7 @@ import scala.compat.Platform.currentTime
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
+import scala.collection.JavaConversions._
 
 class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
 
@@ -35,6 +40,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   private var promise: Promise[RenderedPage] = _
   private var lastUsed = 0L
   private var html = ""
+  private var history = Collections.synchronizedList(new util.ArrayList[String]())
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -43,9 +49,17 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
-      if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
+      val isForCurrentUrl = history.headOption.exists(url => Url(url) == current)
+      if (url.isDefined && isForCurrentUrl && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
         html = webEngine.executeScript("document.documentElement.outerHTML").toString
+      }
+    }
+  })
+  webEngine.getHistory.getEntries.addListener(new ListChangeListener[WebHistory#Entry] {
+    override def onChanged(c: Change[_ <: WebHistory#Entry]): Unit = {
+      while (c.next()) {
+        c.getAddedSubList.foreach(entry => history.add(entry.getUrl))
       }
     }
   })
@@ -55,6 +69,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     lastUsed = currentTime
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
+      history.clear()
       webEngine.load(null)
       this.current = url
       this.promise = pagePromise
