@@ -106,6 +106,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
       case Success((fetched, content)) =>
         repo.save(link.url, link.depth, content).map(_ => Some(fetched))
       case Failure(t) =>
+        logger.error(s"Could not fetch ${link.url}", t)
         repo.save(link.url, link.depth, t).map(_ => None)
     }
   }
