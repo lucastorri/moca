@@ -45,7 +45,8 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   webEngine.setJavaScriptEnabled(settings.enableJavaScript)
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
-      if (event.getValue == JFXWorker.State.SUCCEEDED) {
+      val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
+      if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
       }
     }
@@ -56,9 +57,10 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     lastUsed = currentTime
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
-      webEngine.load(url.toString)
+      webEngine.load(null)
       this.current = url
       this.promise = pagePromise
+      webEngine.load(url.toString)
     })
     pagePromise.future
   }
