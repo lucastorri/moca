@@ -1,10 +1,10 @@
 package com.github.lucastorri.moca.url
 
 import java.net.{URL => JavaURL}
-import io.mola.galimatias.{URL => NormalizedURL}
 import java.security.MessageDigest
 
 import crawlercommons.url.EffectiveTldFinder
+import io.mola.galimatias.{URL => NormalizedURL}
 
 import scala.util.Try
 
