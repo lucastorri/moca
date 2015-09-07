@@ -1,18 +1,6 @@
-package com.github.lucastorri.moca.role.master.scheduler
-
-import com.github.lucastorri.moca.role.Task
+package com.github.lucastorri.moca.role.master.tasks
 
 import scala.concurrent.duration.Deadline
-
-trait TaskScheduler { self: Serializable =>
-
-  def add(task: Task): TaskScheduler
-
-  def next: Option[(Task, TaskScheduler)]
-
-  def release(taskIds: Set[String]): TaskScheduler
-
-}
 
 case class OngoingTask(taskId: String, nextPing: Deadline) {
 

@@ -12,23 +12,23 @@ import com.github.lucastorri.moca.event.EventBus.MasterEvents
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master._
-import com.github.lucastorri.moca.role.master.scheduler.{TaskScheduler, TaskSchedulerCreator}
-import com.github.lucastorri.moca.role.master.tasks.{TasksHandler, TasksHandlerCreator}
+import com.github.lucastorri.moca.role.master.scheduler.PartitionScheduler
+import com.github.lucastorri.moca.role.master.tasks.BasicTasksHandler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(repo: WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler: TasksHandlerCreator, bus: EventBus) extends PersistentActor with StrictLogging {
+class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
 
   private val mediator = DistributedPubSub(context.system).mediator
 
-  private var ongoing = newTaskHandler()
-  private var scheduler = newScheduler()
+  private var ongoing = BasicTasksHandler.initial()
+  private var scheduler = PartitionScheduler.initial()
   private var journalNumberOnSnapshot = 0L
   private var firstClean = true
 
@@ -244,9 +244,9 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(repo: => WorkRepo, newScheduler: TaskSchedulerCreator, newTaskHandler: TasksHandlerCreator, bus: EventBus)(implicit system: ActorSystem): Unit = {
+  def standBy(repo: => WorkRepo, bus: EventBus)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
-    val manager = ClusterSingletonManager.props(Props(new Master(repo, newScheduler, newTaskHandler, bus)), PoisonPill, settings)
+    val manager = ClusterSingletonManager.props(Props(new Master(repo, bus)), PoisonPill, settings)
     system.actorOf(manager, name)
   }
 
@@ -257,6 +257,6 @@ object Master {
   case class TaskDone(who: ActorRef, taskId: String) extends Event
   case class WorkerDied(who: ActorRef) extends Event
 
-  case class State(ongoing: TasksHandler, scheduler: TaskScheduler)
+  case class State(ongoing: BasicTasksHandler, scheduler: PartitionScheduler)
 
 }

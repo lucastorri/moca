@@ -4,9 +4,9 @@ import com.github.lucastorri.moca.role.Task
 
 case class PartitionScheduler(
   queues: Map[String, Seq[Task]], locked: Set[String], 
-  partitions: Map[String, String], scheduled: Seq[Task], all: Set[String]) extends TaskScheduler {
+  partitions: Map[String, String], scheduled: Seq[Task], all: Set[String]) {
 
-  override def add(task: Task): PartitionScheduler = {
+  def add(task: Task): PartitionScheduler = {
     if (all.contains(task.id)) {
       this
     } else if (locked.contains(task.partition)) {
@@ -17,13 +17,13 @@ case class PartitionScheduler(
     }
   }
 
-  override def next: Option[(Task, PartitionScheduler)] = {
+  def next: Option[(Task, PartitionScheduler)] = {
     scheduled.headOption.map { task =>
       task -> copy(scheduled = scheduled.tail, partitions = partitions + (task.id -> task.partition))
     }
   }
 
-  override def release(taskIds: Set[String]): PartitionScheduler = {
+  def release(taskIds: Set[String]): PartitionScheduler = {
     var queuesCopy = queues
     var lockedCopy = locked
     var partitionsCopy = partitions
@@ -54,7 +54,7 @@ case class PartitionScheduler(
 
 object PartitionScheduler {
 
-  def initial: PartitionScheduler =
+  def initial(): PartitionScheduler =
     PartitionScheduler(Map.empty, Set.empty, Map.empty, Seq.empty, Set.empty)
 
   def removeRepeatedTasks(state: PartitionScheduler): PartitionScheduler = {
@@ -88,12 +88,5 @@ object PartitionScheduler {
     
     state.copy(queues = queuesCopy)
   }
-
-}
-
-class PartitionSchedulerCreator extends TaskSchedulerCreator {
-
-  override def apply(): TaskScheduler =
-    PartitionScheduler.initial
 
 }
