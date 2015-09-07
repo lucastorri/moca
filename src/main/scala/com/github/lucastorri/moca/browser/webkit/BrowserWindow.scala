@@ -3,7 +3,6 @@ package com.github.lucastorri.moca.browser.webkit
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
-import java.util
 import java.util.Collections
 import java.util.concurrent.{Executors, TimeUnit}
 import javafx.application.Platform
@@ -24,23 +23,23 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import org.apache.commons.io.IOUtils
 
+import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.compat.Platform.currentTime
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.Random
-import scala.collection.JavaConversions._
 
 class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
 
   val id = Random.alphanumeric.take(32).mkString
+  private val history = Collections.synchronizedList(new java.util.ArrayList[String]())
   private val browser = new WebView
   private val webEngine = browser.getEngine
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
   private var lastUsed = 0L
   private var html = ""
-  private var history = Collections.synchronizedList(new util.ArrayList[String]())
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -49,7 +48,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
-      val isForCurrentUrl = history.headOption.exists(url => Url(url) == current)
+      val isForCurrentUrl = history.headOption.exists(url => Url(url) == current) //TODO check this better
       if (url.isDefined && isForCurrentUrl && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
         html = webEngine.executeScript("document.documentElement.outerHTML").toString
@@ -70,12 +69,17 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
       history.clear()
-      webEngine.load(null)
       this.current = url
       this.promise = pagePromise
       webEngine.load(url.toString)
     })
     pagePromise.future
+  }
+
+  private[BrowserWindow] def stop() = {
+    Platform.runLater(runnable {
+      webEngine.load(null)
+    })
   }
 
   protected override def layoutChildren(): Unit =
@@ -164,6 +168,7 @@ object BrowserWindow extends StrictLogging {
 
   private[browser] def release(window: BrowserWindow): Unit = synchronized {
     logger.trace(s"Release ${window.id}")
+    window.stop()
     if (awaiting.nonEmpty) awaiting.remove(0).success(window)
     else pool += window
   }
