@@ -16,7 +16,7 @@ trait JavaScriptCriteria extends LinkSelectionCriteria {
     val obj = page.exec(script).asInstanceOf[JSObject]
     val length = Try(obj.getMember("length").asInstanceOf[Number].intValue).getOrElse(0)
     val url = page.renderedUrl
-    (0 until length).flatMap(i => Try(url.resolve(obj.getSlot(i).toString)).toOption).toSet
+    (0 until length).flatMap(i => url.resolveOption(obj.getSlot(i).toString)).toSet
   }
 
 }

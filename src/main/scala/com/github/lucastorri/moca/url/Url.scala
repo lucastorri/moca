@@ -32,7 +32,11 @@ class Url private[Url](override val toString: String) extends Serializable {
     _url.port()
 
   def resolve(path: String): Url =
-    Url(_url.resolve(path).toString)
+    try Url(_url.resolve(path).toString)
+    catch { case e: Exception => throw InvalidPathResolutionException(toString, path, e) }
+
+  def resolveOption(path: String): Option[Url] =
+    Try(resolve(path)).toOption
 
   def root: Url =
     resolve("/")
@@ -67,12 +71,19 @@ object Url {
         case -1 => url
         case n => url.substring(0, n)
       }
-      NormalizedURL.parse(cleaned)
+      val normalized = NormalizedURL.parse(cleaned)
+      normalized.scheme() match {
+        case "http" | "https" => normalized
+        case _ => throw InvalidUrlException(normalized.toString, null)
+      }
     } catch {
+      case e: InvalidUrlException => throw e
       case e: Exception => throw InvalidUrlException(url, e)
     }
   }
 
 }
 
-case class InvalidUrlException(url: String, e: Exception) extends Exception(s"Invalid url $url", e)
+case class InvalidUrlException(url: String, e: Exception) extends Exception(s"Invalid url '$url'", e)
+
+case class InvalidPathResolutionException(url: String, path: String, e: Exception) extends Exception(s"Invalid path '$path' to resolve against '$url'", e)
