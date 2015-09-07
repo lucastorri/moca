@@ -56,9 +56,9 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     lastUsed = currentTime
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
+      webEngine.load(url.toString)
       this.current = url
       this.promise = pagePromise
-      webEngine.load(url.toString)
     })
     pagePromise.future
   }
