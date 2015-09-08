@@ -4,34 +4,30 @@ import java.io.StringWriter
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
-import java.util.Collections
 import java.util.concurrent.{Executors, TimeUnit}
 import javafx.application.Platform
 import javafx.beans.value.{ChangeListener, ObservableValue}
-import javafx.collections.ListChangeListener
-import javafx.collections.ListChangeListener.Change
 import javafx.concurrent.Worker.State
 import javafx.concurrent.{Worker => JFXWorker}
 import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
-import javafx.scene.web.{WebHistory, WebView}
+import javafx.scene.web.WebView
 import javafx.stage.Stage
+import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 import javax.xml.transform.{OutputKeys, TransformerFactory}
-import javax.xml.transform.dom.DOMSource
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.browser.webkit.net._
-import com.github.lucastorri.moca.browser.{JavascriptNotSupportedException, BrowserSettings, Content, RenderedPage}
+import com.github.lucastorri.moca.browser.{BrowserSettings, Content, JavascriptNotSupportedException, RenderedPage}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import org.apache.commons.io.IOUtils
 
-import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.compat.Platform.currentTime
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.Random
 
 class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
@@ -42,7 +38,6 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
   private var lastUsed = 0L
-  private var html = ""
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -53,7 +48,6 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
       if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
-//        html = webEngine.executeScript("document.documentElement.outerHTML").toString
       }
     }
   })
@@ -90,9 +84,8 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     override def renderedUrl: Url =
       Url.parse(webEngine.getLocation).getOrElse(originalUrl)
 
-    override def exec(javascript: String): AnyRef = {
-      throw JavascriptNotSupportedException("Disabled, since current bugs on javafx-webkit are causing the jvm to break")
-    }
+    override def exec(javascript: String): AnyRef =
+      throw JavascriptNotSupportedException("JS disabled because bugs on javafx-webkit are causing the jvm to break")
 
     override def renderedHtml: String = {
       val src = new DOMSource(webEngine.getDocument)
