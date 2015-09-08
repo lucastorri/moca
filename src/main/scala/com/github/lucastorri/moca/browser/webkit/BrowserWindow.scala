@@ -174,6 +174,9 @@ object BrowserWindow extends StrictLogging {
     }
   }
 
+  private[browser] def appLoaded(): Future[BrowserApplication] =
+    app.future
+
   Executors.newScheduledThreadPool(1)
     .scheduleWithFixedDelay(cleaningTask, cleanInterval.toMillis, cleanInterval.toMillis, TimeUnit.MILLISECONDS)
 

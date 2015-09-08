@@ -7,5 +7,6 @@ case class WebKitSettings(
   width: Int,
   height: Int,
   headless: Boolean,
-  enableJavaScript: Boolean
+  enableJavaScript: Boolean,
+  startingWindows: Int
 )

@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class WebKitBrowserProvider(config: Config, exec: ExecutionContext, settings: BrowserSettings) extends BrowserProvider {
+class WebKitBrowserProvider(config: Config, exec: ExecutionContext, settings: BrowserSettings) extends BrowserProvider with StrictLogging {
 
   private implicit val ctx = exec
 
@@ -17,7 +17,13 @@ class WebKitBrowserProvider(config: Config, exec: ExecutionContext, settings: Br
       config.getInt("width"),
       config.getInt("height"),
       config.getBoolean("headless"),
-      config.getBoolean("enable-js"))
+      config.getBoolean("enable-js"),
+      config.getInt("starting-windows"))
+  }
+
+  BrowserWindow.appLoaded().onSuccess { case app =>
+    logger.info("WebKit browser started, pre-starting windows")
+    (1 to WebKitBrowserProvider.settings.startingWindows).foreach(_ => app.newWindow(WebKitBrowserProvider.settings))
   }
 
   override def instance(): Browser = new Browser with StrictLogging {
