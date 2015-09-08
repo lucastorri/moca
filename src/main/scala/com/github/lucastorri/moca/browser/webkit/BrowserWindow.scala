@@ -88,11 +88,11 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       throw JavascriptNotSupportedException("JS disabled because bugs on javafx-webkit are causing the jvm to break")
 
     override def renderedHtml: String = {
-      val src = new DOMSource(webEngine.getDocument)
-      val writer = new StringWriter()
       val transformer = TransformerFactory.newInstance().newTransformer()
       transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
-      transformer.transform(src, new StreamResult(writer))
+      transformer.setOutputProperty(OutputKeys.METHOD, "html")
+      val writer = new StringWriter()
+      transformer.transform(new DOMSource(webEngine.getDocument), new StreamResult(writer))
       writer.flush()
       writer.toString
     }
