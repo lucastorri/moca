@@ -33,7 +33,6 @@ import scala.util.Random
 class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) extends Region with Ordered[BrowserWindow] with StrictLogging {
 
   val id = Random.alphanumeric.take(32).mkString
-  private val history = Collections.synchronizedList(new java.util.ArrayList[String]())
   private val browser = new WebView
   private val webEngine = browser.getEngine
   private var current: Url = _
@@ -48,17 +47,9 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   webEngine.getLoadWorker.stateProperty().addListener(new ChangeListener[State] {
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
-      val isForCurrentUrl = history.headOption.exists(url => Url(url) == current) //TODO check this better
-      if (url.isDefined && isForCurrentUrl && event.getValue == JFXWorker.State.SUCCEEDED) {
+      if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
         html = webEngine.executeScript("document.documentElement.outerHTML").toString
-      }
-    }
-  })
-  webEngine.getHistory.getEntries.addListener(new ListChangeListener[WebHistory#Entry] {
-    override def onChanged(c: Change[_ <: WebHistory#Entry]): Unit = {
-      while (c.next()) {
-        c.getAddedSubList.foreach(entry => history.add(entry.getUrl))
       }
     }
   })
@@ -68,7 +59,6 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     lastUsed = currentTime
     val pagePromise = Promise[RenderedPage]()
     Platform.runLater(runnable {
-      history.clear()
       this.current = url
       this.promise = pagePromise
       webEngine.load(url.toString)
