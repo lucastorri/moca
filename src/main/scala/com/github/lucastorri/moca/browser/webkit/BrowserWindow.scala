@@ -38,6 +38,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   private var current: Url = _
   private var promise: Promise[RenderedPage] = _
   private var lastUsed = 0L
+  private var html = ""
 
   logger.trace(s"Window $id starting")
   getChildren.add(browser)
@@ -47,6 +48,19 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
     override def changed(event: ObservableValue[_ <: State], oldValue: State, newValue: State): Unit = {
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
       if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
+        html =
+          try {
+            val transformer = TransformerFactory.newInstance().newTransformer()
+            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+            transformer.setOutputProperty(OutputKeys.METHOD, "html")
+            val writer = new StringWriter()
+            transformer.transform(new DOMSource(webEngine.getDocument), new StreamResult(writer))
+            writer.flush()
+            writer.toString
+          } catch { case e: Exception =>
+            logger.error(s"Could not serialize html for $current", e)
+            ""
+          }
         promise.success(InternalRenderedPage(current))
       }
     }
@@ -88,13 +102,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       throw JavascriptNotSupportedException("JS disabled because bugs on javafx-webkit are causing the jvm to break")
 
     override def renderedHtml: String = {
-      val transformer = TransformerFactory.newInstance().newTransformer()
-      transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
-      transformer.setOutputProperty(OutputKeys.METHOD, "html")
-      val writer = new StringWriter()
-      transformer.transform(new DOMSource(webEngine.getDocument), new StreamResult(writer))
-      writer.flush()
-      writer.toString
+      html
     }
 
     override def renderedContent: Content = {
