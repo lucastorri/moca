@@ -8,8 +8,12 @@ import com.github.lucastorri.moca.url.Url
 case class SameDomainCriteria(criteria: LinkSelectionCriteria) extends LinkSelectionCriteria {
 
   override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = {
-    val domain = link.url.domain
-    criteria.select(task, link, page).filter(_.domain == domain)
+    val originalDomain = link.url.domain
+    val renderedDomain = page.renderedUrl.domain
+    criteria.select(task, link, page).filter { l =>
+      val domain = l.domain
+      domain == originalDomain || domain == renderedDomain
+    }
   }
 
 }

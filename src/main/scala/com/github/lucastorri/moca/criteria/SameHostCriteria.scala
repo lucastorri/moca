@@ -8,8 +8,12 @@ import com.github.lucastorri.moca.url.Url
 case class SameHostCriteria(criteria: LinkSelectionCriteria) extends LinkSelectionCriteria {
 
   override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = {
-    val host = link.url.host
-    criteria.select(task, link, page).filter(_.host == host)
+    val originalHost = link.url.host
+    val renderedHost = page.renderedUrl.host
+    criteria.select(task, link, page).filter { l =>
+      val host = l.host
+      host == originalHost || host == renderedHost
+    }
   }
 
 }

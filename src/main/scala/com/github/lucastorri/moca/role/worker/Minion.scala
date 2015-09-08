@@ -102,6 +102,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   def save(link: Link, result: Try[(Fetched, Content)]): Future[Option[Fetched]] = {
+    //TODO save both original and rendered Url
     result match {
       case Success((fetched, content)) =>
         repo.save(link.url, link.depth, content).map(_ => Some(fetched))
