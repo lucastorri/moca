@@ -63,10 +63,8 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
         saved.onComplete {
           case Success(Some(fetched)) =>
-            logger.debug(s"Fetched ${next.url} at depth ${next.depth}")
             self ! fetched
           case Success(None) =>
-            logger.debug(s"Could not fetch ${next.url}")
             self ! NotFetched(next)
           case Failure(t) =>
             logger.error(s"Could not save ${next.url}", t)
@@ -105,9 +103,10 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
     //TODO save both original and rendered Url
     result match {
       case Success((fetched, content)) =>
+        logger.debug(s"Fetched ${fetched.link.url} at depth ${fetched.link.depth}")
         repo.save(link.url, link.depth, content).map(_ => Some(fetched))
       case Failure(t) =>
-        logger.error(s"Could not fetch ${link.url}", t)
+        logger.debug(s"Could not fetch ${link.url}", t)
         repo.save(link.url, link.depth, t).map(_ => None)
     }
   }
