@@ -1,5 +1,6 @@
 package com.github.lucastorri.moca.browser.webkit
 
+import java.io.StringWriter
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -15,10 +16,13 @@ import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 import javafx.scene.web.{WebHistory, WebView}
 import javafx.stage.Stage
+import javax.xml.transform.stream.StreamResult
+import javax.xml.transform.{OutputKeys, TransformerFactory}
+import javax.xml.transform.dom.DOMSource
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.browser.webkit.net._
-import com.github.lucastorri.moca.browser.{BrowserSettings, Content, RenderedPage}
+import com.github.lucastorri.moca.browser.{JavascriptNotSupportedException, BrowserSettings, Content, RenderedPage}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 import org.apache.commons.io.IOUtils
@@ -49,7 +53,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       val url = Option(webEngine.getLocation).filter(_.trim != "about:blank")
       if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         promise.success(InternalRenderedPage(current))
-        html = webEngine.executeScript("document.documentElement.outerHTML").toString
+//        html = webEngine.executeScript("document.documentElement.outerHTML").toString
       }
     }
   })
@@ -87,14 +91,18 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       Url.parse(webEngine.getLocation).getOrElse(originalUrl)
 
     override def exec(javascript: String): AnyRef = {
-      val promise = Promise[AnyRef]()
-      Platform.runLater(runnable(promise.success(webEngine.executeScript(javascript))))
-      try Await.result(promise.future, settings.loadTimeout)
-      catch { case e: Exception => e }
+      throw JavascriptNotSupportedException("Disabled, since current bugs on javafx-webkit are causing the jvm to break")
     }
 
-    override def renderedHtml: String =
-      html
+    override def renderedHtml: String = {
+      val src = new DOMSource(webEngine.getDocument)
+      val writer = new StringWriter()
+      val transformer = TransformerFactory.newInstance().newTransformer()
+      transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
+      transformer.transform(src, new StreamResult(writer))
+      writer.flush()
+      writer.toString
+    }
 
     override def renderedContent: Content = {
       val buffer = settings.charset.encode(renderedHtml)

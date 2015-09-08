@@ -19,3 +19,5 @@ trait RenderedPage {
   def settings: BrowserSettings
 
 }
+
+case class JavascriptNotSupportedException(msg: String) extends Exception(msg)

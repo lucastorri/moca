@@ -20,3 +20,9 @@
 http://site0.test:8000|1
 ```
 
+## TODO
+
+* Re-enable Javascript execution on the JavaFX WebKit browser:
+  - it was removed due to issues with the jvm. Getting objects from it seem to make the whole process crash
+  - Change back BrowserWindow to use 'html = webEngine.executeScript("document.documentElement.outerHTML").toString'
+  - Change back AHrefCriteria to use 'override val script: String = "Array.prototype.slice.call(document.getElementsByTagName('a')).map(function(e) { return e.href; });"'

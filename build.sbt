@@ -20,7 +20,8 @@ libraryDependencies ++= Seq(
   "com.esotericsoftware" % "kryo" % "3.0.3",
   "com.github.crawler-commons" % "crawler-commons" % "0.6",
   "org.json4s" %% "json4s-jackson" % "3.2.11",
-  "io.mola.galimatias" % "galimatias" % "0.2.0")
+  "io.mola.galimatias" % "galimatias" % "0.2.0",
+  "org.jsoup" % "jsoup" % "1.8.3")
 
 resolvers ++= Seq(
   "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/")
