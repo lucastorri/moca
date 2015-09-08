@@ -24,5 +24,6 @@ http://site0.test:8000|1
 
 * Re-enable Javascript execution on the JavaFX WebKit browser:
   - it was removed due to issues with the jvm. Getting objects from it seem to make the whole process crash
+  - try by using a bridge: https://blogs.oracle.com/javafx/entry/communicating_between_javascript_and_javafx
   - Change back BrowserWindow to use 'html = webEngine.executeScript("document.documentElement.outerHTML").toString'
   - Change back AHrefCriteria to use 'override val script: String = "Array.prototype.slice.call(document.getElementsByTagName('a')).map(function(e) { return e.href; });"'
