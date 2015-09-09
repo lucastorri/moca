@@ -64,8 +64,6 @@ case class FSTaskContentRepo(directory: Path, serializer: ContentSerializer) ext
 
 case class FileContentLinksTransfer(log: String) extends ContentLinksTransfer {
 
-  val data = new DataInputStream(new FileInputStream(Paths.get(log).toFile))
-
   override def contents: Stream[ContentLink] = {
     val data = new DataInputStream(new FileInputStream(Paths.get(log).toFile))
     def next: Stream[ContentLink] = {
