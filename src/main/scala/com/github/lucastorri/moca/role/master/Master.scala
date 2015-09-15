@@ -175,6 +175,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
       }
       ongoing = ongoing.extendDeadline(toExtend)
       firstClean = false
+      logger.trace(s"Final state is $ongoing + $scheduler")
 
     case SaveSnapshotSuccess(meta) =>
       deleteMessages(journalNumberOnSnapshot - 1)

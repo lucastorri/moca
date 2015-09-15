@@ -126,7 +126,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
   }
 
   override def compare(that: BrowserWindow): Int =
-    that.lastUsed.compareTo(this.lastUsed)
+    this.lastUsed.compareTo(that.lastUsed)
 
   def close(): Unit = {
     stage.close()
@@ -158,7 +158,7 @@ object BrowserWindow extends StrictLogging {
       app.future.foreach(_.newWindow(WebKitBrowserProvider.settings))
       awaiting += promise
     } else {
-      val window = pool.head
+      val window = pool.last
       pool.remove(window)
       promise.success(window)
     }
