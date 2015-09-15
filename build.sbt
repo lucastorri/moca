@@ -21,7 +21,11 @@ libraryDependencies ++= Seq(
   "com.github.crawler-commons" % "crawler-commons" % "0.6",
   "org.json4s" %% "json4s-jackson" % "3.2.11",
   "io.mola.galimatias" % "galimatias" % "0.2.0",
-  "org.jsoup" % "jsoup" % "1.8.3")
+  "org.jsoup" % "jsoup" % "1.8.3",
+  "com.typesafe.slick" %% "slick" % "3.0.2",
+  "com.github.tminglei" %% "slick-pg" % "0.9.1",
+  "org.postgresql" % "postgresql" % "9.4-1202-jdbc42",
+  "com.zaxxer" % "HikariCP" % "2.4.1")
 
 resolvers ++= Seq(
   "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/")

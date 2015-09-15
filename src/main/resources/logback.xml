@@ -5,6 +5,13 @@
 
     <logger name="crawlercommons" level="INFO" />
 
+    <logger name="slick" level="INFO" />
+
+    <logger name="slick" level="INFO" />
+
+    <logger name="com.zaxxer.hikari" level="INFO" />
+
+
     <logger name="com.github.lucastorri.moca.browser.webkit" level="INFO" />
 
     <logger name="com.github.lucastorri.moca.role.worker" level="DEBUG" />
