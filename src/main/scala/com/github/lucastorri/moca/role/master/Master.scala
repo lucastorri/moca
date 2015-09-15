@@ -13,7 +13,7 @@ import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master._
 import com.github.lucastorri.moca.role.master.scheduler.PartitionScheduler
-import com.github.lucastorri.moca.role.master.tasks.BasicTasksHandler
+import com.github.lucastorri.moca.role.master.tasks.TaskHandler
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.scalalogging.StrictLogging
 
@@ -27,7 +27,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
 
   private val mediator = DistributedPubSub(context.system).mediator
 
-  private var ongoing = BasicTasksHandler.initial()
+  private var ongoing = TaskHandler.initial()
   private var scheduler = PartitionScheduler.initial()
   private var journalNumberOnSnapshot = 0L
   private var firstClean = true
@@ -164,11 +164,11 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
       if (!firstClean) saveSnapshot(State(ongoing, scheduler))
 
       val toExtend = ongoing.ongoingTasks().map { case (who, all) =>
-        val toPing = all.filter(_.shouldPing || firstClean)
-        toPing.foreach { ongoing =>
-          retry(3)(who ? IsInProgress(ongoing.taskId)).acked.onFailure { case t =>
+        val toPing = all.filter(_.shouldPing || firstClean).map(_.taskId)
+        toPing.foreach { taskId =>
+          retry(3)(who ? IsInProgress(taskId)).acked.onFailure { case t =>
             logger.trace(s"$who is down")
-            self ! TaskFailed(who, ongoing.taskId)
+            self ! TaskFailed(who, taskId)
           }
         }
         who -> toPing
@@ -259,6 +259,6 @@ object Master {
   case class TaskDone(who: ActorRef, taskId: String) extends Event
   case class WorkerDied(who: ActorRef) extends Event
 
-  case class State(ongoing: BasicTasksHandler, scheduler: PartitionScheduler)
+  case class State(ongoing: TaskHandler, scheduler: PartitionScheduler)
 
 }
