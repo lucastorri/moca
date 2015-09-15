@@ -1,9 +1,9 @@
 package com.github.lucastorri.moca.store.work
 
 import com.github.tminglei.slickpg.PgArraySupport
+import com.github.tminglei.slickpg.utils.SimpleArrayUtils._
 import slick.driver.PostgresDriver
 import slick.jdbc.{GetResult, PositionedParameters, PositionedResult, SetParameter}
-import com.github.tminglei.slickpg.utils.SimpleArrayUtils._
 
 object PgDriver extends PostgresDriver with PgArraySupport {
 
@@ -15,15 +15,11 @@ object PgDriver extends PostgresDriver with PgArraySupport {
       fromString(identity)(_).orNull, mkString(identity))
 
     implicit object SetByteArray extends SetParameter[Array[Byte]] {
-      def apply(v: Array[Byte], pp: PositionedParameters) {
-        pp.setBytes(v)
-      }
+      def apply(v: Array[Byte], pp: PositionedParameters) = pp.setBytes(v)
     }
 
     implicit object SetByteArrayOption extends SetParameter[Option[Array[Byte]]] {
-      def apply(v: Option[Array[Byte]], pp: PositionedParameters) {
-        pp.setBytesOption(v)
-      }
+      def apply(v: Option[Array[Byte]], pp: PositionedParameters) = pp.setBytesOption(v)
     }
 
     implicit object GetByteArray extends GetResult[Array[Byte]] {

@@ -1,20 +1,18 @@
-package com.github.lucastorri.moca.store.work.run
+package com.github.lucastorri.moca.store.work
 
 import java.util.Collections
 import java.util.concurrent.Semaphore
-import java.util.concurrent.locks.ReentrantLock
 
 import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
-import com.github.lucastorri.moca.store.work.WorkRepo
 import com.github.lucastorri.moca.url.Url
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.util.{Try, Random}
+import scala.util.{Random, Try}
 
 
 trait RunBasedWorkRepo extends WorkRepo {

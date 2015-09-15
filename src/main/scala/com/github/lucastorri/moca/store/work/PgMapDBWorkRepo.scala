@@ -1,15 +1,14 @@
 package com.github.lucastorri.moca.store.work
 
 import akka.actor.ActorSystem
-import com.github.lucastorri.moca.criteria.{AHrefCriteria, LinkSelectionCriteria}
-import com.github.lucastorri.moca.event.{EventBus, UnbufferedEventBus}
-import com.github.lucastorri.moca.partition.{ByHostPartitionSelector, PartitionSelector}
+import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
+import com.github.lucastorri.moca.event.EventBus
+import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.store.serialization.KryoSerialization
-import com.github.lucastorri.moca.store.work.run.RunBasedWorkRepo
 import com.github.lucastorri.moca.url.Url
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.Await._
@@ -17,7 +16,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-class PostgreMapDBWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus) extends RunBasedWorkRepo with StrictLogging {
+class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus) extends RunBasedWorkRepo with StrictLogging {
 
   implicit val exec: ExecutionContext = system.dispatcher
 
