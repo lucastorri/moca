@@ -11,6 +11,12 @@
 
     <logger name="com.zaxxer.hikari" level="INFO" />
 
+    <logger name="com.github.mauricio" level="INFO" />
+
+    <logger name="io.netty" level="INFO" />
+
+    <logger name="scalikejdbc" level="INFO" />
+
 
     <logger name="com.github.lucastorri.moca.browser.webkit" level="INFO" />
 

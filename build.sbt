@@ -16,16 +16,18 @@ libraryDependencies ++= Seq(
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
   "com.github.scopt" %% "scopt" % "3.3.0",
-  "org.mapdb" % "mapdb" % "2.0-beta6",
-  "com.esotericsoftware" % "kryo" % "3.0.3",
   "com.github.crawler-commons" % "crawler-commons" % "0.6",
-  "org.json4s" %% "json4s-jackson" % "3.2.11",
   "io.mola.galimatias" % "galimatias" % "0.2.0",
   "org.jsoup" % "jsoup" % "1.8.3",
+  "org.json4s" %% "json4s-jackson" % "3.2.11",
+  "org.mapdb" % "mapdb" % "2.0-beta6",
+  "com.esotericsoftware" % "kryo" % "3.0.3",
   "com.typesafe.slick" %% "slick" % "3.0.2",
   "com.github.tminglei" %% "slick-pg" % "0.9.1",
   "org.postgresql" % "postgresql" % "9.4-1202-jdbc42",
-  "com.zaxxer" % "HikariCP" % "2.4.1")
+  "com.zaxxer" % "HikariCP" % "2.4.1",
+  "com.okumin" %% "akka-persistence-sql-async" % "0.3",
+  "com.github.mauricio" %% "postgresql-async" % "0.2.16")
 
 resolvers ++= Seq(
   "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/")
