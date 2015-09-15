@@ -3,19 +3,17 @@
     <property name="pattern" value="%date{HH:mm:ss} %-5level %logger{0}.%method - %msg%n" />
 
 
-    <logger name="crawlercommons" level="INFO" />
+    <logger name="crawlercommons" level="WARN" />
 
-    <logger name="slick" level="INFO" />
+    <logger name="slick" level="WARN" />
 
-    <logger name="slick" level="INFO" />
+    <logger name="com.zaxxer.hikari" level="WARN" />
 
-    <logger name="com.zaxxer.hikari" level="INFO" />
+    <logger name="com.github.mauricio" level="WARN" />
 
-    <logger name="com.github.mauricio" level="INFO" />
+    <logger name="io.netty" level="WARN" />
 
-    <logger name="io.netty" level="INFO" />
-
-    <logger name="scalikejdbc" level="INFO" />
+    <logger name="scalikejdbc" level="WARN" />
 
 
     <logger name="com.github.lucastorri.moca.browser.webkit" level="INFO" />
