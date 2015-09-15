@@ -26,7 +26,7 @@ libraryDependencies ++= Seq(
   "com.github.tminglei" %% "slick-pg" % "0.9.1",
   "org.postgresql" % "postgresql" % "9.4-1202-jdbc42",
   "com.zaxxer" % "HikariCP" % "2.4.1",
-  "com.okumin" %% "akka-persistence-sql-async" % "0.3",
+  "com.okumin" %% "akka-persistence-sql-async" % "0.3" exclude("com.typesafe.akka", "akka-persistence_2.11"),
   "com.github.mauricio" %% "postgresql-async" % "0.2.16")
 
 resolvers ++= Seq(
@@ -44,4 +44,6 @@ lazy val root = (project in file("."))
   .settings(
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "com.github.lucastorri.moca.config")
+
+net.virtualvoid.sbt.graph.Plugin.graphSettings
 
