@@ -1,6 +1,5 @@
 package com.github.lucastorri.moca.store.work
 
-import java.util.Collections
 import java.util.concurrent.Semaphore
 
 import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
@@ -11,6 +10,8 @@ import com.github.lucastorri.moca.url.Url
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.concurrent.Await._
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Random, Try}
 
@@ -20,6 +21,10 @@ trait RunBasedWorkRepo extends WorkRepo {
   implicit def exec: ExecutionContext
 
   def partition: PartitionSelector
+
+  protected def init(): Future[Unit]
+
+  protected def listRuns(): Future[Set[String]]
 
   protected def loadRun(runId: String): Future[Run]
 
@@ -31,7 +36,18 @@ trait RunBasedWorkRepo extends WorkRepo {
 
   protected def saveRelease(run: Run, taskIds: Set[String]): Future[Unit]
 
-  //TODO reload on startup
+
+  protected def start(): Unit = {
+    result(init(), 15.seconds)
+
+    result({
+      listRuns().flatMap { runs =>
+        val loadingAll = runs.toSeq.map(runId => RunControl.get(runId))
+        Future.sequence(loadingAll)
+      }
+    }, 60.seconds)
+  }
+
 
   object RunControl {
 
@@ -109,8 +125,8 @@ trait RunBasedWorkRepo extends WorkRepo {
 
     val lock = new Semaphore(1, true)
     //TODO use mapdb on a temp file
-    val allTasks = Collections.newSetFromMap[String](new java.util.concurrent.ConcurrentHashMap)
-    val depths = new java.util.concurrent.ConcurrentHashMap[Int, Int]
+    val allTasks = mutable.HashSet.empty[String]
+    val depths = mutable.HashMap.empty[Int, Int]
 
     def subTasks(depth: Int, links: Set[Url]): Future[Unit] = locked {
       val tasks = mutable.HashSet.empty[Task]

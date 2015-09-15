@@ -11,8 +11,7 @@ import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.concurrent.Await._
-import scala.concurrent.duration._
+import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -27,7 +26,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
 
   private val db = Database.forConfig("connection", config)
 
-  def createWorkTable: DBIO[Int] =
+  private def createWorkTable: DBIO[Int] =
     sqlu"""
           create table if not exists work(
               id varchar(256) not null primary key,
@@ -35,7 +34,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               criteria bytea not null)
         """
 
-  def createRunTable: DBIO[Int] =
+  private def createRunTable: DBIO[Int] =
     sqlu"""
            create table if not exists run(
               id varchar(128) not null primary key,
@@ -44,7 +43,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               foreign key(work_id) references work(id))
         """
 
-  def createLatestResultTable: DBIO[Int] =
+  private def createLatestResultTable: DBIO[Int] =
     sqlu"""
            create table if not exists latest_result(
               id bigserial primary key,
@@ -56,7 +55,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               foreign key(work_id) references work(id))
         """
 
-  def createTaskTable: DBIO[Int] =
+  private def createTaskTable: DBIO[Int] =
     sqlu"""
            create table if not exists task(
               id varchar(256) primary key,
@@ -68,7 +67,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               foreign key(run_id) references run(id))
         """
 
-  def createUrlDepthTable: DBIO[Int] =
+  private def createUrlDepthTable: DBIO[Int] =
     sqlu"""
            create table if not exists url_depth(
               run_id varchar(128) not null,
@@ -78,7 +77,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               primary key(run_id, url))
         """
 
-  def createContentLinkTable: DBIO[Int] = //TODO associate to the work + run
+  private def createContentLinkTable: DBIO[Int] =
     sqlu"""
            create table if not exists content_link(
               id bigserial primary key,
@@ -89,19 +88,6 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
               hash varchar(256) not null,
               foreign key(run_id) references run(id))
         """
-
-  val create = for {
-    _ <- createWorkTable
-    _ <- createRunTable
-    _ <- createLatestResultTable
-    _ <- createTaskTable
-    _ <- createUrlDepthTable
-    _ <- createContentLinkTable
-  } yield ()
-
-  result(db.run(create.transactionally), 10.seconds)
-
-  //TODO reload data
 
   private def selectLatestContentLinks(workId: String) =
     sql"""select url, uri, depth, hash from createLatestResultTable where work_id = $workId""".as[(String, String, Int, String)]
@@ -115,6 +101,9 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     val serializedCriteria = ws.serialize(CriteriaHolder(criteria))
     sqlu"insert into run (id, work_id, criteria) values ($id, $workId, $serializedCriteria)"
   }
+
+  private def selectRunIds() =
+    sql"""select id from run""".as[(String)]
 
   private def selectRun(id: String) = {
     sql"""select id, work_id, criteria from run where id = $id""".as[(String, String, Array[Byte])].headOption.map {
@@ -160,12 +149,31 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
   private def moveFromContentLinkToLatestRun(workId: String, runId: String): DBIO[Int] =
     sqlu"""insert into latest_result (work_id, url, uri, depth, hash) select $workId, url, uri, depth, hash from content_link where run_id = $runId"""
 
+  private def selectUrlsFromUrlDepth(runId: String) =
+    sql"""select url, depth from url_depth where run_id = $runId""".as[(String, Int)]
 
-  override protected def loadRun(runId: String): Future[Run] =
-    db.run(selectRun(runId)).map {
-      case Some((id, workId, criteria)) => Run(id, workId, criteria)
-      case None => throw new Exception(s"Run $runId not found")
+  private def selectIdsFromTask(runId: String) =
+    sql"""select id from task where run_id = $runId""".as[(String)]
+
+  override protected def loadRun(runId: String): Future[Run] = {
+    db.run(selectRun(runId)).flatMap {
+      case Some((id, workId, criteria)) =>
+        val urlsResult = db.run(selectUrlsFromUrlDepth(runId))
+        val tasksResult = db.run(selectIdsFromTask(runId))
+        for {
+          urls <- urlsResult
+          tasks <- tasksResult
+        } yield {
+          val depths = urls.map { case (url, depth) => Url(url).hashCode -> depth }.toMap
+          val run = Run(id, workId, criteria)
+          run.depths.putAll(depths)
+          run.allTasks.addAll(tasks)
+          run
+        }
+      case None =>
+        Future.failed(new RuntimeException(s"Run $runId not found"))
     }
+  }
 
   override protected def saveRunAndWork(run: Run, work: Work): Future[Unit] = {
     val action = DBIO.seq(
@@ -240,6 +248,23 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     }
   }
 
+  override protected def init(): Future[Unit] = {
+    val create = for {
+      _ <- createWorkTable
+      _ <- createRunTable
+      _ <- createLatestResultTable
+      _ <- createTaskTable
+      _ <- createUrlDepthTable
+      _ <- createContentLinkTable
+    } yield ()
+
+    db.run(create.transactionally)
+  }
+
+  override protected def listRuns(): Future[Set[String]] =
+    db.run(selectRunIds()).map(_.toSet)
+
+  start()
 }
 
 case class CriteriaHolder(criteria: LinkSelectionCriteria)
