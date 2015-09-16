@@ -43,7 +43,7 @@ case class FSCacheEntry(files: FilePair) extends CacheEntry {
     val status = lines.head.split("\\s+")(1).toInt
 
     val headers = lines.tail
-      .map { field => val Array(name, value) = field.split(":", 2); name -> value }
+      .map { field => val Array(name, value) = field.split(":", 2); name -> value.trim }
       .groupBy { case (name, value) => name }
       .mapValues(_.map { case (name, value) => value }.toSet)
 

@@ -37,7 +37,6 @@ class S3ContentRepo(config: Config, serializer: ContentSerializer) extends Conte
     client
   }
 
-  //TODO throws exception if bucket exists
   val bucket = client.createBucket(config.getString("bucket-name"))
 
   override def apply(task: Task): TaskContentRepo = new S3TaskContentRepo(client, bucket, task, serializer)
