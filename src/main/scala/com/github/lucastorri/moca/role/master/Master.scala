@@ -215,7 +215,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
           messenger ! WorkLinks(taskId, transfer)
         case Failure(t) =>
           logger.error("Could not retrieve links", t)
-          messenger
+          nack(messenger)
       }
 
   }
