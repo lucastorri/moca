@@ -73,6 +73,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
           self ! Finished
         case Failure(t) =>
           logger.error("Could not update master of finished task", t)
+          //TODO fail
           self ! Finished
       }
       stay()

@@ -27,7 +27,8 @@ libraryDependencies ++= Seq(
   "org.postgresql" % "postgresql" % "9.4-1202-jdbc42",
   "com.zaxxer" % "HikariCP" % "2.4.1",
   "com.okumin" %% "akka-persistence-sql-async" % "0.3" exclude("com.typesafe.akka", "akka-persistence_2.11"),
-  "com.github.mauricio" %% "postgresql-async" % "0.2.16")
+  "com.github.mauricio" %% "postgresql-async" % "0.2.16",
+  "com.amazonaws" % "aws-java-sdk-s3" % "1.10.17")
 
 resolvers ++= Seq(
   "Akka Snapshot Repository" at "http://repo.akka.io/snapshots/")

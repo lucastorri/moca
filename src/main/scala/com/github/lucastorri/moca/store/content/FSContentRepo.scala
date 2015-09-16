@@ -10,6 +10,7 @@ import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 
+import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
@@ -67,8 +68,10 @@ case class FileContentLinksTransfer(log: String) extends ContentLinksTransfer {
   override def contents: Stream[ContentLink] = {
     val data = new DataInputStream(new FileInputStream(Paths.get(log).toFile))
     def next: Stream[ContentLink] = {
-      if (data.available() <= 0) Stream.empty
-      else Stream {
+      if (data.available() <= 0) {
+        data.close()
+        Stream.empty
+      } else Stream {
         val depth = data.readInt()
         val url = Url(data.readUTF())
         val file = data.readUTF()
