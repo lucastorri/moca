@@ -57,6 +57,10 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     case Event(MasterUp, _) =>
       goto(State.OnHold)
 
+    case Event(IsInProgress(taskId), task) =>
+      sender() ! Nack
+      stay()
+
   }
 
   when(State.Working) {
@@ -94,6 +98,10 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       abortTask()
       goto(State.Idle) using null
 
+    case Event(IsInProgress(taskId), task) =>
+      sender() ! (if (taskId == task.id) Ack else Nack)
+      stay()
+
     case Event(Finished, _) =>
       goto(State.Idle) using null
 
@@ -108,6 +116,10 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       goto(State.Idle)
 
     case Event(TaskOffer(task), _) =>
+      sender() ! Nack
+      stay()
+
+    case Event(IsInProgress(taskId), task) =>
       sender() ! Nack
       stay()
 
