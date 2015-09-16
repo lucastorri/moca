@@ -46,7 +46,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
   when(State.Idle, stateTimeout = requestWorkInterval) {
 
     case Event(StateTimeout | RequestWork | TasksAvailable, _) =>
-      master ! TaskRequest
+      master ! TaskRequest(self)
       stay()
 
     case Event(TaskOffer(task), _) =>
@@ -72,7 +72,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     case Event(Done, _) =>
       sender() ! PoisonPill
       val transfer = repo.links(stateData)
-      retry(3)(master ? TaskFinished(stateData.id, transfer)).acked().onComplete {
+      retry(3)(master ? TaskFinished(self, stateData.id, transfer)).acked().onComplete {
         case Success(_) =>
           self ! Finished
         case Failure(t) =>
@@ -152,7 +152,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
   }
 
   private def abortTask(): Unit = {
-    retry(3)(master ? AbortTask(stateData.id))
+    retry(3)(master ? AbortTask(self, stateData.id))
     children.foreach(context.stop)
   }
 

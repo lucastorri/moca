@@ -97,8 +97,8 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
         mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
       }
 
-    case TaskRequest =>
-      val who = sender()
+    case TaskRequest(who) =>
+      val sentBy = sender()
       scheduler.next match {
         case Some((task, next)) =>
           persist(TaskStarted(who, task.id)) { _ =>
@@ -111,7 +111,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
             }
           }
         case None =>
-          who ! Nack
+          nack(sentBy)
       }
 
     case Terminated(who) =>
@@ -135,21 +135,22 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
         }
       }
 
-    case AbortTask(taskId) =>
-      self ! TaskFailed(sender(), taskId)
-      sender() ! Ack
+    case AbortTask(who, taskId) =>
+      val sentBy = sender()
+      self ! TaskFailed(who, taskId)
+      ack(sentBy)
 
-    case TaskFinished(taskId, transfer) =>
+    case TaskFinished(who, taskId, transfer) =>
       logger.info(s"Task $taskId done")
-      val who = sender()
+      val sentBy = sender()
       repo.done(taskId, transfer).onComplete {
         case Success(finishedWorkId) =>
           finishedWorkId.foreach(id => logger.info(s"Finished run on work $id"))
-          who ! Ack
+          ack(sentBy)
           self ! TaskDone(who, taskId)
         case Failure(t) =>
           logger.error(s"Could not mark $taskId done", t)
-          who ! Nack
+          nack(sentBy)
       }
 
     case done @ TaskDone(who, taskId) =>
@@ -183,40 +184,44 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
 
     case ConsistencyCheck =>
       //TODO check for discrepancies between repo and state
-      sender() ! Ack
+      val sentBy = sender()
+      ack(sentBy)
 
     case AddWork(seeds) =>
       logger.trace("Adding new seeds")
-      val who = sender()
+      val sentBy = sender()
       repo.addWork(seeds).onComplete {
         case Success(_) =>
-          who ! Ack
+          ack(sentBy)
         case Failure(t) =>
           logger.error("Could not add seeds", t)
-          who ! Nack
+          nack(sentBy)
       }
 
     case AddSubTask(taskId, depth, urls) =>
-      val who = sender()
+      val sentBy = sender()
       repo.addTask(taskId, depth, urls).onComplete {
         case Success(_) =>
-          who ! Ack
+          ack(sentBy)
         case Failure(t) =>
           logger.error("Could not add sub-task", t)
-          who ! Nack
+          ack(sentBy)
       }
 
     case GetLinks(taskId) =>
-      val who = sender()
+      val sentBy = sender()
       repo.links(taskId).onComplete {
         case Success(transfer) =>
-          who ! WorkLinks(taskId, transfer)
+          sentBy ! WorkLinks(taskId, transfer)
         case Failure(t) =>
           logger.error("Could not retrieve links", t)
-          who ! Nack
+          sentBy
       }
 
   }
+
+  private def ack(who: ActorRef): Unit = who ! Ack
+  private def nack(who: ActorRef): Unit = who ! Nack
 
   override def unhandled(message: Any): Unit = message match {
     case _: DeleteSnapshotsSuccess =>
