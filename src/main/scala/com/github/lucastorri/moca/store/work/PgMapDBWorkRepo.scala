@@ -23,6 +23,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
 
   //TODO inject a serializer factory instead of system
   private val ws = new KryoSerialization[CriteriaHolder](system)
+  private val ts = new KryoSerialization[ContentLinksTransferHolder](system)
 
   private val db = Database.forConfig("connection", config)
 
@@ -48,10 +49,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
            create table if not exists latest_result(
               id bigserial primary key,
               work_id varchar(256) not null,
-              url varchar(1024) not null,
-              uri varchar(1024) not null,
-              depth integer not null,
-              hash varchar(256) not null,
+              transfer bytea not null,
               foreign key(work_id) references work(id))
         """
 
@@ -82,15 +80,13 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
            create table if not exists content_link(
               id bigserial primary key,
               run_id varchar(128) not null,
-              url varchar(1024) not null,
-              uri varchar(1024) not null,
-              depth integer not null,
-              hash varchar(256) not null,
+              transfer bytea not null,
               foreign key(run_id) references run(id))
         """
 
   private def selectLatestContentLinks(workId: String) =
-    sql"""select url, uri, depth, hash from latest_result where work_id = $workId""".as[(String, String, Int, String)]
+    sql"""select transfer from latest_result where work_id = $workId order by id desc""".as[(Array[Byte])].headOption
+      .map(_.map(ts.deserialize(_).transfer))
 
   private def insertWork(work: Work): DBIO[Int] = {
     val serializedCriteria = ws.serialize(CriteriaHolder(work.criteria))
@@ -122,8 +118,8 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
   private def updateUrlDepth(runId: String, url: Url, depth: Int): DBIO[Int] =
     sqlu"""update url_depth set depth = $depth where run_id = $runId and url = ${url.toString}"""
 
-  private def insertContentLink(runId: String, link: ContentLink): DBIO[Int] =
-    sqlu"""insert into content_link (run_id, url, uri, depth, hash) values ($runId, ${link.url.toString}, ${link.uri}, ${link.depth}, ${link.hash})"""
+  private def insertContentLink(runId: String, transfer: ContentLinksTransfer): DBIO[Int] =
+    sqlu"""insert into content_link (run_id, transfer) values ($runId, ${ts.serialize(ContentLinksTransferHolder(transfer))})"""
 
   private def updateTaskNotStarted(taskId: String): DBIO[Int] =
     sqlu"""update task set started = false where id = $taskId"""
@@ -140,14 +136,16 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
   private def deleteFromRun(runId: String): DBIO[Int] =
     sqlu"""delete from run where id = $runId"""
 
-  private def deleteFromLatestResult(workId: String): DBIO[Int] =
-    sqlu"""delete from latest_result where work_id = $workId"""
-
   private def deleteFromContentLink(runId: String): DBIO[Int] =
     sqlu"""delete from content_link where run_id = $runId"""
 
-  private def moveFromContentLinkToLatestRun(workId: String, runId: String): DBIO[Int] =
-    sqlu"""insert into latest_result (work_id, url, uri, depth, hash) select $workId, url, uri, depth, hash from content_link where run_id = $runId"""
+  private def selectTransfersFromContentLink(runId: String) =
+    sql"""select transfer from content_link where run_id = $runId""".as[(Array[Byte])].map { transfers =>
+      transfers.map(ts.deserialize(_).transfer)
+    }
+
+  private def insertIntoLatestResult(workId: String, transfer: ContentLinksTransfer): DBIO[Int] =
+    sqlu"""insert into latest_result (work_id, transfer) values ($workId, ${ts.serialize(ContentLinksTransferHolder(transfer))})"""
 
   private def selectUrlsFromUrlDepth(runId: String) =
     sql"""select url, depth from url_depth where run_id = $runId""".as[(String, Int)]
@@ -186,21 +184,21 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
 
   override protected def saveTaskDone(run: Run, taskId: String, transfer: ContentLinksTransfer, last: Boolean): Future[Unit] = safe {
 
-    val addContents = transfer.contents.map(insertContentLink(run.id, _)) :+ deleteFromTask(taskId)
-
-    val allActions =
     if (last) {
-      addContents ++ Seq(
-        deleteFromLatestResult(run.workId),
-        moveFromContentLinkToLatestRun(run.workId, run.id),
-        deleteFromContentLink(run.id),
-        deleteFromUrlDepth(run.id),
-        deleteFromRun(run.id))
+      db.run(selectTransfersFromContentLink(run.id))
+        .map(transfers => CombinedLinksTransfer(transfers :+ transfer))
+        .flatMap { combined =>
+          db.run(DBIO.seq(
+            deleteFromTask(taskId),
+            insertIntoLatestResult(run.workId, combined),
+            deleteFromContentLink(run.id),
+            deleteFromUrlDepth(run.id),
+            deleteFromRun(run.id)
+          ).transactionally).map(_ => ())
+        }
     } else {
-      addContents
+      db.run(DBIO.seq(insertContentLink(run.id, transfer), deleteFromTask(taskId)).transactionally).map(_ => ())
     }
-
-    db.run(DBIO.sequence(allActions).transactionally).map(_ => ())
   }
 
   override protected def saveTasks(run: Run, tasks: Set[Task], newUrls: Set[Url], shallowerUrls: Set[Url]): Future[Unit] = safe {
@@ -222,12 +220,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
   }
 
   override def links(workId: String): Future[Option[ContentLinksTransfer]] = safe {
-    db.run(selectLatestContentLinks(workId)).map {
-      case v if v.isEmpty => None
-      case v =>
-        val links = v.map { case (url, uri, depth, hash) => ContentLink(Url(url), uri, depth, hash) }
-        Some(AllContentLinksTransfer(links))
-    }
+    db.run(selectLatestContentLinks(workId))
   }
 
   override def close(): Unit = {
@@ -274,4 +267,13 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
 
 }
 
+case class CombinedLinksTransfer(transfers: Seq[ContentLinksTransfer]) extends ContentLinksTransfer {
+  override def contents: Stream[ContentLink] = {
+    transfers.foldLeft(Stream.empty[ContentLink]) { case (stream, next) =>
+      stream #::: next.contents
+    }
+  }
+}
+
 case class CriteriaHolder(criteria: LinkSelectionCriteria)
+case class ContentLinksTransferHolder(transfer: ContentLinksTransfer)
