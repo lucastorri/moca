@@ -90,7 +90,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
         """
 
   private def selectLatestContentLinks(workId: String) =
-    sql"""select url, uri, depth, hash from createLatestResultTable where work_id = $workId""".as[(String, String, Int, String)]
+    sql"""select url, uri, depth, hash from latest_result where work_id = $workId""".as[(String, String, Int, String)]
 
   private def insertWork(work: Work): DBIO[Int] = {
     val serializedCriteria = ws.serialize(CriteriaHolder(work.criteria))
@@ -155,7 +155,8 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
   private def selectIdsFromTask(runId: String) =
     sql"""select id from task where run_id = $runId""".as[(String)]
 
-  override protected def loadRun(runId: String): Future[Run] = {
+
+  override protected def loadRun(runId: String): Future[Run] = safe {
     db.run(selectRun(runId)).flatMap {
       case Some((id, workId, criteria)) =>
         val urlsResult = db.run(selectUrlsFromUrlDepth(runId))
@@ -175,7 +176,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     }
   }
 
-  override protected def saveRunAndWork(run: Run, work: Work): Future[Unit] = {
+  override protected def saveRunAndWork(run: Run, work: Work): Future[Unit] = safe {
     val action = DBIO.seq(
       insertWork(work),
       insertRun(run.id, run.workId, run.criteria)
@@ -183,7 +184,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     db.run(action.transactionally).map(_ => ())
   }
 
-  override protected def saveTaskDone(run: Run, taskId: String, transfer: ContentLinksTransfer, last: Boolean): Future[Unit] = {
+  override protected def saveTaskDone(run: Run, taskId: String, transfer: ContentLinksTransfer, last: Boolean): Future[Unit] = safe {
 
     val addContents = transfer.contents.map(insertContentLink(run.id, _)) :+ deleteFromTask(taskId)
 
@@ -202,7 +203,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     db.run(DBIO.sequence(allActions).transactionally).map(_ => ())
   }
 
-  override protected def saveTasks(run: Run, tasks: Set[Task], newUrls: Set[Url], shallowerUrls: Set[Url]): Future[Unit] = {
+  override protected def saveTasks(run: Run, tasks: Set[Task], newUrls: Set[Url], shallowerUrls: Set[Url]): Future[Unit] = safe {
     val addTasks = tasks.toSeq.map(insertTask(run.id, _))
     val updateDepths =
       for {
@@ -216,11 +217,11 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     db.run(DBIO.sequence(addTasks ++ updateDepths).transactionally).map(_ => publish())
   }
 
-  override protected def saveRelease(run: Run, taskIds: Set[String]): Future[Unit] = {
+  override protected def saveRelease(run: Run, taskIds: Set[String]): Future[Unit] = safe {
     db.run(DBIO.sequence(taskIds.toSeq.map(updateTaskNotStarted)).transactionally).map(_ => publish())
   }
 
-  override def links(workId: String): Future[Option[ContentLinksTransfer]] = {
+  override def links(workId: String): Future[Option[ContentLinksTransfer]] = safe {
     db.run(selectLatestContentLinks(workId)).map {
       case v if v.isEmpty => None
       case v =>
@@ -248,7 +249,7 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     }
   }
 
-  override protected def init(): Future[Unit] = {
+  override protected def init(): Future[Unit] = safe {
     val create = for {
       _ <- createWorkTable
       _ <- createRunTable
@@ -261,10 +262,16 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
     db.run(create.transactionally)
   }
 
-  override protected def listRuns(): Future[Set[String]] =
+  override protected def listRuns(): Future[Set[String]] = safe {
     db.run(selectRunIds()).map(_.toSet)
+  }
+
+  private def safe[T](f: => Future[T]): Future[T] =
+    try f
+    catch { case e: Exception => Future.failed(e) }
 
   start()
+
 }
 
 case class CriteriaHolder(criteria: LinkSelectionCriteria)
