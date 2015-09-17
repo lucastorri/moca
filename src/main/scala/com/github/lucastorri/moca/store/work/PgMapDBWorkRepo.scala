@@ -197,18 +197,24 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
           ).transactionally).map(_ => ())
         }
     } else {
-      db.run(DBIO.seq(insertContentLink(run.id, transfer), deleteFromTask(taskId)).transactionally).map(_ => ())
+      val depthUpdates = transfer.contents.map { link =>
+        if (run.compareDepth(link.url, link.depth).isNew) insertUrlDepth(run.id, link.url, link.depth)
+        else updateUrlDepth(run.id, link.url, link.depth)
+      }
+      db.run(DBIO.sequence(
+        Seq(insertContentLink(run.id, transfer), deleteFromTask(taskId)) ++ depthUpdates
+      ).transactionally).map(_ => ())
     }
   }
 
-  override protected def saveTasks(run: Run, tasks: Set[Task], newUrls: Set[Url], shallowerUrls: Set[Url]): Future[Unit] = safe {
+  override protected def saveTasks(run: Run, tasks: Set[Task]): Future[Unit] = safe {
     val addTasks = tasks.toSeq.map(insertTask(run.id, _))
     val updateDepths =
       for {
         task <- tasks
         url <- task.seeds
       } yield {
-        if (newUrls.contains(url)) insertUrlDepth(run.id, url, task.initialDepth)
+        if (run.compareDepth(url, task.initialDepth).isNew) insertUrlDepth(run.id, url, task.initialDepth)
         else updateUrlDepth(run.id, url, task.initialDepth)
       }
 

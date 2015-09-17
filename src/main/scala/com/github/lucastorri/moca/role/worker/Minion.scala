@@ -96,7 +96,6 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
       logger.trace(s"Processing ${link.url}")
       Fetched(link, Found(link.depth + 1, task.select(link, page))) -> page.renderedContent
     }
-    //TODO use result.andThen
     result.map(Success.apply).recover { case e => Failure(e) }
   }
 

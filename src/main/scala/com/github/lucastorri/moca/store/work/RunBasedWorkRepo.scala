@@ -30,7 +30,7 @@ trait RunBasedWorkRepo extends WorkRepo {
 
   protected def saveRunAndWork(run: Run, work: Work): Future[Unit]
 
-  protected def saveTasks(run: Run, tasks: Set[Task], newUrls: Set[Url], shallowerUrls: Set[Url]): Future[Unit]
+  protected def saveTasks(run: Run, tasks: Set[Task]): Future[Unit]
 
   protected def saveTaskDone(run: Run, taskId: String, transfer: ContentLinksTransfer, last: Boolean): Future[Unit]
 
@@ -129,25 +129,13 @@ trait RunBasedWorkRepo extends WorkRepo {
     val depths = mutable.HashMap.empty[Int, Int]
 
     def subTasks(depth: Int, links: Set[Url]): Future[Unit] = locked {
-      val tasks = mutable.HashSet.empty[Task]
-      val newUrls = mutable.HashSet.empty[Url]
-      val shallowerUrls = mutable.HashSet.empty[Url]
-      links.groupBy(partition.apply).foreach { case (part, urls) =>
-        val urlsToUse = urls.filter {
-          case url if !depths.contains(url.hashCode) =>
-            newUrls.add(url)
-            true
-          case url if depth < depths(url.hashCode) =>
-            shallowerUrls.add(url)
-            true
-          case _ =>
-            false
-        }
-        if (urlsToUse.nonEmpty) tasks.add(Task(RunControl.newTaskId(id), urlsToUse, criteria, depth, part))
-      }
-      saveTasks(this, tasks.toSet, newUrls.toSet, shallowerUrls.toSet).map { _ =>
+      val newUrls = links.filter(compareDepth(_, depth).shouldAdd)
+      val tasks = newUrls.groupBy(partition.apply).map { case (part, urls) =>
+        Task(RunControl.newTaskId(id), urls, criteria, depth, part)
+      }.toSet
+      saveTasks(this, tasks).map { _ =>
         allTasks.addAll(tasks.map(_.id))
-        (newUrls ++ shallowerUrls).foreach(url => depths.put(url.hashCode, depth))
+        newUrls.foreach(url => depths.put(url.hashCode, depth))
       }
     }
 
@@ -161,6 +149,13 @@ trait RunBasedWorkRepo extends WorkRepo {
         } else {
           None
         }
+      }
+    }
+
+    def compareDepth(url: Url, newDepth: Int): DepthState = {
+      depths.get(url.hashCode) match {
+        case Some(depth) => if (newDepth < depth) SmallerThanExisting else ExistingIsSmaller
+        case None => NewDepth
       }
     }
 
@@ -211,5 +206,10 @@ trait RunBasedWorkRepo extends WorkRepo {
 
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] =
     RunControl.get(taskId).flatMap(_.done(taskId, transfer))
+
+  sealed abstract class DepthState(val shouldAdd: Boolean, val isNew: Boolean)
+  case object NewDepth extends DepthState(true, true)
+  case object SmallerThanExisting extends DepthState(true, false)
+  case object ExistingIsSmaller extends DepthState(false, false)
 
 }
