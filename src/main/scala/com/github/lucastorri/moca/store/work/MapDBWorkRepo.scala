@@ -7,7 +7,7 @@ import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
-import com.github.lucastorri.moca.store.serialization.KryoSerialization
+import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -19,7 +19,7 @@ import scala.compat.Platform
 import scala.concurrent.Future
 import scala.util.{Random, Try}
 
-class MapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSelector, bus: EventBus) extends WorkRepo with StrictLogging {
+class MapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSelector, bus: EventBus, serializers: SerializerService) extends WorkRepo with StrictLogging {
 
   val base = Paths.get(config.getString("directory"))
   base.toFile.mkdirs()
@@ -34,8 +34,8 @@ class MapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSel
   private val latestResults = db.hashMap[String, Array[Byte]]("latest-results")
   private val runs = db.hashMap[String, String]("running-works")
 
-  private val ws = new KryoSerialization[Work](system)
-  private val rs = new KryoSerialization[AllContentLinksTransfer](system)
+  private val ws = serializers.create[Work]
+  private val rs = serializers.create[AllContentLinksTransfer]
 
   private val running = mutable.HashMap.empty[String, Run]
   runs.foreach { case (workId, runId) =>
@@ -121,13 +121,13 @@ class MapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSel
 
   private def createFor(work: Work): Run = {
     val runId = Run.mkId(Run.runIdSize)
-    val run = new Run(runId, work, base, system, partition)
+    val run = new Run(runId, work, base, serializers, partition)
     run
   }
   
   private def loadFor(runId: String, workId: String): Run = {
     val work = ws.deserialize(works.get(workId))
-    val run = new Run(runId, work, base, system, partition)
+    val run = new Run(runId, work, base, serializers, partition)
     run
   }
 
@@ -138,7 +138,7 @@ class MapDBWorkRepo(config: Config, system: ActorSystem, partition: PartitionSel
 
 }
 
-case class Run(id: String, work: Work, directory: Path, system: ActorSystem, partition: PartitionSelector) extends StrictLogging {
+case class Run(id: String, work: Work, directory: Path, serializers: SerializerService, partition: PartitionSelector) extends StrictLogging {
 
   private val file = directory.resolve(id).toFile
 
@@ -153,8 +153,8 @@ case class Run(id: String, work: Work, directory: Path, system: ActorSystem, par
   private val depths = db.hashMap[Url, Int]("depths")
   private val links = db.hashMap[Int, Array[Byte]]("links")
 
-  private val ts = new KryoSerialization[Task](system)
-  private val cs = new KryoSerialization[ContentLink](system)
+  private val ts = serializers.create[Task]
+  private val cs = serializers.create[ContentLink]
 
   def initialTasks(): Unit =
     newTasks(Set(work.seed), 0)

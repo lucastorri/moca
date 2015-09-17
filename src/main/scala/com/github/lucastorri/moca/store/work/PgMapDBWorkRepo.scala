@@ -6,7 +6,7 @@ import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
-import com.github.lucastorri.moca.store.serialization.KryoSerialization
+import com.github.lucastorri.moca.store.serialization.{SerializerService, KryoSerializer}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -15,15 +15,15 @@ import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus) extends RunBasedWorkRepo with StrictLogging {
+class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus, serializers: SerializerService) extends RunBasedWorkRepo with StrictLogging {
 
   implicit val exec: ExecutionContext = system.dispatcher
 
   import PgDriver.api._
 
   //TODO inject a serializer factory instead of system
-  private val ws = new KryoSerialization[CriteriaHolder](system)
-  private val ts = new KryoSerialization[ContentLinksTransferHolder](system)
+  private val ws = serializers.create[CriteriaHolder]
+  private val ts = serializers.create[ContentLinksTransferHolder]
 
   private val db = Database.forConfig("connection", config)
 

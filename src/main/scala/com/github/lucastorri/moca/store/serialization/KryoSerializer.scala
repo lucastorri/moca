@@ -2,26 +2,23 @@ package com.github.lucastorri.moca.store.serialization
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
-import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
+import akka.actor.{ActorRef, ExtendedActorSystem}
+import akka.serialization.Serialization
 import com.esotericsoftware.kryo.io.{Input, Output}
-import com.esotericsoftware.kryo.{Kryo, Serializer => KryoSerializer}
+import com.esotericsoftware.kryo.{Kryo, Serializer => LibKryoSerializer}
 import org.objenesis.strategy.StdInstantiatorStrategy
 
 import scala.reflect.ClassTag
 
-class KryoSerialization[T](system: ActorSystem)(implicit tag: ClassTag[T]) {
+class KryoSerializer[T](system: ExtendedActorSystem)(implicit tag: ClassTag[T]) extends Serializer[T] {
 
-  private val extendedSystem = system.asInstanceOf[ExtendedActorSystem]
-
-  private val extraSerializers = Map[Class[_], KryoSerializer[_]](
-    classOf[ActorRef] -> ActorRefKryoSerializer(extendedSystem)
-  )
-
-  def kryo: Kryo = {
+  private def kryo: Kryo = {
     val k = new Kryo()
     k.setRegistrationRequired(false)
     k.setInstantiatorStrategy(new StdInstantiatorStrategy)
-    extraSerializers.foreach { case (clazz, serializer) => k.addDefaultSerializer(clazz, serializer) }
+
+    k.addDefaultSerializer(classOf[ActorRef], ActorRefKryoSerializer(system))
+
     k
   }
 
@@ -44,5 +41,15 @@ class KryoSerialization[T](system: ActorSystem)(implicit tag: ClassTag[T]) {
     in.close()
     r
   }
+
+}
+
+case class ActorRefKryoSerializer(system: ExtendedActorSystem) extends LibKryoSerializer[ActorRef] {
+
+  override def write(kryo: Kryo, out: Output, ref: ActorRef): Unit =
+    out.writeString(Serialization.serializedActorPath(ref))
+
+  override def read(kryo: Kryo, in: Input, typ: Class[ActorRef]): ActorRef =
+    system.provider.resolveActorRef(in.readString())
 
 }

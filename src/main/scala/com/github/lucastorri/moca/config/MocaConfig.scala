@@ -14,6 +14,7 @@ import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
+import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.store.work.WorkRepo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -80,12 +81,13 @@ case class MocaConfig(
     val build = ClassBuilder.fromConfig(repoConfig,
       classOf[ActorSystem] -> system,
       classOf[PartitionSelector] -> partition,
+      classOf[SerializerService] -> serializerService,
       classOf[EventBus] -> bus)
 
     build()
   }
 
-  lazy val serializer: ContentSerializer = {
+  lazy val contentSerializer: ContentSerializer = {
     val serializerConfig = main.getConfig(main.getString("moca.content-serializer-id"))
     val build = ClassBuilder.fromConfig(serializerConfig)
 
@@ -96,7 +98,7 @@ case class MocaConfig(
     val repoConfig = main.getConfig(main.getString("moca.content-repo-id"))
     val build = ClassBuilder.fromConfig(repoConfig,
       classOf[ActorSystem] -> system,
-      classOf[ContentSerializer] -> serializer)
+      classOf[ContentSerializer] -> contentSerializer)
 
     build()
   }
@@ -129,6 +131,14 @@ case class MocaConfig(
   lazy val bus: EventBus = {
     val busConfig = main.getConfig(main.getString("moca.event-bus-id"))
     val build = ClassBuilder.fromConfig(busConfig)
+
+    build()
+  }
+  
+  lazy val serializerService: SerializerService = {
+    val serviceConfig = main.getConfig(main.getString("moca.serializer-service-id"))
+    val build = ClassBuilder.fromConfig(serviceConfig,
+      classOf[ActorSystem] -> system)
 
     build()
   }

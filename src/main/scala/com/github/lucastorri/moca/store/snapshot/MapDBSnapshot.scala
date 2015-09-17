@@ -2,9 +2,10 @@ package com.github.lucastorri.moca.store.snapshot
 
 import java.nio.file.Paths
 
+import akka.actor.ExtendedActorSystem
 import akka.persistence.snapshot.SnapshotStore
 import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
-import com.github.lucastorri.moca.store.serialization.KryoSerialization
+import com.github.lucastorri.moca.store.serialization.KryoSerializer
 import com.typesafe.config.Config
 import org.mapdb.DBMaker
 
@@ -61,7 +62,7 @@ class MapDBSnapshot(config: Config) extends SnapshotStore {
     }
   }
 
-  private case class DBUnit(persistenceId: String) extends KryoSerialization[SnapshotContainer](system) {
+  private case class DBUnit(persistenceId: String) extends KryoSerializer[SnapshotContainer](system.asInstanceOf[ExtendedActorSystem]) {
 
     private val db = DBMaker
       .appendFileDB(base.resolve(persistenceId).toFile)

@@ -2,10 +2,10 @@ package com.github.lucastorri.moca.store.journal
 
 import java.nio.file._
 
-import akka.actor.ActorRef
+import akka.actor.{ExtendedActorSystem, ActorRef}
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{AtomicWrite, PersistentRepr}
-import com.github.lucastorri.moca.store.serialization.KryoSerialization
+import com.github.lucastorri.moca.store.serialization.KryoSerializer
 import com.typesafe.config.Config
 import org.mapdb.DBMaker
 
@@ -69,7 +69,7 @@ class MapDBJournal(config: Config) extends AsyncWriteJournal {
     }
   }
 
-  private case class DBUnit(persistenceId: String) extends KryoSerialization[CustomPersistentRepr](system) {
+  private case class DBUnit(persistenceId: String) extends KryoSerializer[CustomPersistentRepr](system.asInstanceOf[ExtendedActorSystem]) {
 
     private lazy val db = DBMaker
       .appendFileDB(base.resolve(persistenceId).toFile)
