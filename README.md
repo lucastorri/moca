@@ -6,13 +6,7 @@
 ```
 
 
-## Checking results for a specific seed
-
-```bash
-./target/scala-2.11/moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -r 1
-```
-
-## Seeds file example
+### Seeds file example
 
 ```
 !& default
@@ -21,12 +15,20 @@
 != same-domain
 != a-href
 
-http://site0.test:8000|1
+http://site0.test:8000
 ```
+
+
+## Checking results for a specific seed
+
+```bash
+./target/scala-2.11/moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -r 1
+```
+
 
 ## Set Up PostgreSQL for `PgMapDBWorkRepo`
 
-Just run the following on shell:
+Just run the following on your console:
 
 ```shell
 createdb moca
@@ -35,7 +37,7 @@ createdb moca
 
 ## Set Up PostgreSQL for `akka-persistence-sql-async`
 
-Run the following on your shell:
+Run the following on your console:
 
 ```bash
 createdb akka-persistence
