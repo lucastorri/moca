@@ -150,12 +150,12 @@ case class S3ContentLinkTransfer(listUrl: String) extends ContentLinksTransfer {
     val in = new URL(listUrl).openStream()
 
     def next: Stream[ContentLink] = {
-      if (in.available() == 0) {
-        in.close()
-        Stream.empty
-      } else {
+      try {
         val (url, uri, depth, hash) = readMeta(in)
         ContentLink(url, uri, depth, hash) #:: next
+      } catch { case e: EOFException =>
+        in.close()
+        Stream.empty
       }
     }
 

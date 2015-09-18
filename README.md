@@ -32,6 +32,15 @@ Just run the following on your console:
 
 ```shell
 createdb moca
+createuser --pwprompt moca
+psql -h localhost moca
+```
+
+And on psql:
+
+```sql
+GRANT ALL PRIVILEGES ON DATABASE "moca" TO "moca";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "public" TO "moca";
 ```
 
 
@@ -63,10 +72,25 @@ CREATE TABLE IF NOT EXISTS snapshot (
   PRIMARY KEY (persistence_id, sequence_nr)
 );
 
-GRANT ALL PRIVILEGES ON database "akka-persistence" to "akka-persistence";
-GRANT ALL PRIVILEGES ON TABLE "journal" to "akka-persistence";
-GRANT ALL PRIVILEGES ON TABLE "snapshot" to "akka-persistence";
+GRANT ALL PRIVILEGES ON DATABASE "akka-persistence" TO "akka-persistence";
+GRANT ALL PRIVILEGES ON TABLE "journal" TO "akka-persistence";
+GRANT ALL PRIVILEGES ON TABLE "snapshot" TO "akka-persistence";
 ```
+
+## Configure PostgreSQL for remote access
+
+Add the following to `postgresql.conf`:
+
+```
+listen_addresses = '*'
+```
+
+And this to `pg_hba.conf`:
+
+```
+host all all 0.0.0.0/0 md5
+```
+
 
 ## Set Up FakeS3 for `S3ContentRepo`
 
@@ -76,7 +100,7 @@ GRANT ALL PRIVILEGES ON TABLE "snapshot" to "akka-persistence";
 
 ```bash
 gem install fakes3
-fakes3 -r tmp-dir -p 4568
+rm -rf s3rver && mkdir s3rver && fakes3 -r s3rver/ -p 4568 -H 192.168.2.105
 ```
 
 

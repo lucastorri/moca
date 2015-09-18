@@ -15,7 +15,7 @@ import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus, serializers: SerializerService) extends RunBasedWorkRepo with StrictLogging {
+class PgWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus, serializers: SerializerService) extends RunBasedWorkRepo with StrictLogging {
 
   implicit val exec: ExecutionContext = system.dispatcher
 
@@ -274,11 +274,9 @@ class PgMapDBWorkRepo(config: Config, system: ActorSystem, val partition: Partit
 }
 
 case class CombinedLinksTransfer(transfers: Seq[ContentLinksTransfer]) extends ContentLinksTransfer {
-  override def contents: Stream[ContentLink] = {
-    transfers.foldLeft(Stream.empty[ContentLink]) { case (stream, next) =>
-      stream #::: next.contents
-    }
-  }
+
+  override def contents: Stream[ContentLink] = transfers.toStream.flatMap(_.contents)
+
 }
 
 case class CriteriaHolder(criteria: LinkSelectionCriteria)
