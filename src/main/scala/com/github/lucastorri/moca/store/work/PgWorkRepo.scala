@@ -15,6 +15,9 @@ import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
+//TODO if there is a subtask added that has the same partition of a running task, don't schedule it yet, but rather
+// let it finish, so it could be checked when the running task reports done and the fetched urls, if the new task
+// still needs to be executed or not
 class PgWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSelector, bus: EventBus, serializers: SerializerService) extends RunBasedWorkRepo with StrictLogging {
 
   implicit val exec: ExecutionContext = system.dispatcher
