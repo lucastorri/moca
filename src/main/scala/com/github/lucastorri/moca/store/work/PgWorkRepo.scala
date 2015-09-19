@@ -197,7 +197,7 @@ class PgWorkRepo(config: Config, system: ActorSystem, val partition: PartitionSe
             deleteFromContentLink(run.id),
             deleteFromUrlDepth(run.id),
             deleteFromRun(run.id)
-          ).transactionally).map(_ => ())
+          ).transactionally)
         }
     } else {
       val depthUpdates = transfer.contents.map { link =>
