@@ -15,12 +15,13 @@ import com.github.lucastorri.moca.role.master.Master._
 import com.github.lucastorri.moca.role.master.scheduler.PartitionScheduler
 import com.github.lucastorri.moca.role.master.tasks.TaskHandler
 import com.github.lucastorri.moca.store.work.WorkRepo
+import com.github.lucastorri.moca.wip.RunControl
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictLogging {
+class Master(repo: RunControl, bus: EventBus) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
@@ -118,8 +119,10 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
       logger.info(s"Worker down: $who")
       persist(WorkerDied(who)) { _ =>
         val taskIds = ongoing.ongoingTasks(who).map(_.taskId)
-        repo.releaseAll(taskIds).onFailure { case t =>
-          logger.error("Could not release worker tasks", t)
+        taskIds.foreach { taskId =>
+          repo.abort(taskId).onFailure { case t =>  //TODO let control receive a set
+            logger.error("Could not release worker tasks", t)
+          }
         }
         ongoing = ongoing.cancel(who)
         scheduler = scheduler.release(taskIds)
@@ -130,7 +133,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
       persist(fail) { _ =>
         ongoing = ongoing.cancel(who, taskId)
         scheduler = scheduler.release(Set(taskId))
-        repo.release(taskId).onFailure { case t =>
+        repo.abort(taskId).onFailure { case t =>
           logger.error(s"Could not release $taskId", t)
         }
       }
@@ -190,7 +193,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
     case AddWork(seeds) =>
       logger.trace("Adding new seeds")
       val messenger = sender()
-      repo.addWork(seeds).onComplete {
+      repo.add(seeds).onComplete {
         case Success(_) =>
           ack(messenger)
         case Failure(t) =>
@@ -200,7 +203,7 @@ class Master(repo: WorkRepo, bus: EventBus) extends PersistentActor with StrictL
 
     case AddSubTask(taskId, depth, urls) =>
       val messenger = sender()
-      repo.addTask(taskId, depth, urls).onComplete {
+      repo.subTasks(taskId, depth, urls).onComplete {
         case Success(_) =>
           ack(messenger)
         case Failure(t) =>
@@ -251,7 +254,7 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(repo: => WorkRepo, bus: EventBus)(implicit system: ActorSystem): Unit = {
+  def standBy(repo: => RunControl, bus: EventBus)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
     val manager = ClusterSingletonManager.props(Props(new Master(repo, bus)), PoisonPill, settings)
     system.actorOf(manager, name)

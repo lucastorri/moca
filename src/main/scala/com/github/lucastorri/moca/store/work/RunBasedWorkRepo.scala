@@ -16,6 +16,7 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Random, Try}
 
 
+//TODO make this a regular class, that works tightly with Master, and receives a WorkRepo
 trait RunBasedWorkRepo extends WorkRepo {
 
   implicit def exec: ExecutionContext

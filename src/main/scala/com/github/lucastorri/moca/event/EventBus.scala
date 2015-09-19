@@ -16,6 +16,6 @@ object EventBus {
 
   sealed trait Topic[T]
   case object NewTasks extends Topic[Task]
-  case object MasterEvents extends Topic[MasterEvent]
+  case object MasterEvents extends Topic[MasterEvent] //TODO can be replaced by the default actorSystem bus
 
 }

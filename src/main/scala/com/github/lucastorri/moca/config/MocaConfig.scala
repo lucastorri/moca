@@ -8,6 +8,7 @@ import com.github.lucastorri.moca.browser.{BrowserProvider, BrowserSettings}
 import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
+import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
 import com.github.lucastorri.moca.role.master.Master
@@ -16,9 +17,10 @@ import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.store.work.WorkRepo
+import com.github.lucastorri.moca.wip.{TaskPublisher, RunControl}
 import com.typesafe.config.{Config, ConfigFactory}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Future, ExecutionContext}
 import scala.concurrent.duration.Duration
 
 case class MocaConfig(
@@ -82,6 +84,27 @@ case class MocaConfig(
       classOf[ActorSystem] -> system,
       classOf[PartitionSelector] -> partition,
       classOf[SerializerService] -> serializerService,
+      classOf[EventBus] -> bus)
+
+    build()
+  }
+
+  lazy val taskPublisher: TaskPublisher = {
+    new TaskPublisher {
+      override def push(tasks: Set[Task]): Future[Unit] = {
+        tasks.foreach(task => bus.publish(EventBus.NewTasks, task))
+        Future.successful(())
+      }
+    }
+  }
+
+  def runControl: RunControl = {
+    val controlConfig = main.getConfig(main.getString("moca.run-control-id"))
+    val build = ClassBuilder.fromConfig(controlConfig,
+      classOf[ExecutionContext] -> system.dispatcher,
+      classOf[PartitionSelector] -> partition,
+      classOf[SerializerService] -> serializerService,
+      classOf[TaskPublisher] -> taskPublisher,
       classOf[EventBus] -> bus)
 
     build()

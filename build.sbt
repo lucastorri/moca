@@ -8,6 +8,7 @@ scalacOptions := Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "2.2.5" % "test",
+  "org.scala-lang.modules" %% "scala-async" % "0.9.5",
   "com.typesafe.akka" %% "akka-remote" % "2.4-SNAPSHOT",
   "com.typesafe.akka" %% "akka-cluster-sharding" % "2.4-SNAPSHOT",
   "com.typesafe.akka" %% "akka-contrib" % "2.4-SNAPSHOT",
