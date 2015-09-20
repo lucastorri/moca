@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.store.serialization
 
-import akka.actor.{ExtendedActorSystem, ActorSystem}
+import akka.actor.{ActorSystem, ExtendedActorSystem}
 
 import scala.reflect.ClassTag
 

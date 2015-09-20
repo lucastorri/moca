@@ -6,7 +6,7 @@ import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
-import com.github.lucastorri.moca.store.serialization.{SerializerService, KryoSerializer}
+import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging

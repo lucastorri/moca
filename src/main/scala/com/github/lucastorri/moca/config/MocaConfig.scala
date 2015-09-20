@@ -17,11 +17,11 @@ import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.store.work.WorkRepo
-import com.github.lucastorri.moca.wip.{TaskPublisher, RunControl}
+import com.github.lucastorri.moca.wip.{RunControl, TaskPublisher}
 import com.typesafe.config.{Config, ConfigFactory}
 
-import scala.concurrent.{Future, ExecutionContext}
 import scala.concurrent.duration.Duration
+import scala.concurrent.{ExecutionContext, Future}
 
 case class MocaConfig(
   systemName: String = "MocaSystem",

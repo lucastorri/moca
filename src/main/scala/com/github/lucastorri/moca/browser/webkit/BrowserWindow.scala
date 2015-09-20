@@ -1,6 +1,5 @@
 package com.github.lucastorri.moca.browser.webkit
 
-import java.io.StringWriter
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -13,9 +12,6 @@ import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 import javafx.scene.web.WebView
 import javafx.stage.Stage
-import javax.xml.transform.dom.DOMSource
-import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
 import com.github.lucastorri.moca.browser.html.W3CDocumentSerializer

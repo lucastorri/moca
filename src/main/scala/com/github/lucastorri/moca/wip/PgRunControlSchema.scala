@@ -4,10 +4,6 @@ import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
 import com.github.lucastorri.moca.url.Url
-import com.typesafe.config.Config
-
-import scala.async.Async._
-import scala.concurrent.{Await, Future}
 
 trait PgRunControlSchema { self: PgRunControl =>
 

@@ -1,17 +1,14 @@
 package com.github.lucastorri.moca.browser.html
 
 import java.io.StringWriter
-import javax.xml.stream.XMLOutputFactory
 import javax.xml.transform.dom.DOMSource
-import javax.xml.transform.stax.StAXResult
 import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.{TransformerException, ErrorListener, OutputKeys, TransformerFactory}
+import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import org.jdom2.UncheckedJDOMFactory
-import org.w3c.dom.Document
-import org.w3c.dom.html.HTMLDocument
 import org.jdom2.input.DOMBuilder
 import org.jdom2.output.XMLOutputter
+import org.w3c.dom.Document
 
 object W3CDocumentSerializer {
 

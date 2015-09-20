@@ -96,6 +96,15 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     control.close()
   }
 
+  it must "complain when completing a non existing task" in new context {
+
+    val r = control.done("blah", FakeTransfer())
+
+    an[Exception] must be thrownBy { result(r) }
+
+    control.close()
+  }
+
   it must "complete a non final task" in new context {
 
     result(control.add(Set(
@@ -150,7 +159,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
   }
 
   it must "return fetched content for work" in new context {
-
+    //TODO
   }
 
   it must "republish a task if it was aborted" in new context {
@@ -169,6 +178,8 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
 
     control.close()
   }
+
+  //TODO have two awaiting partitions
 
   //TODO test restart
 

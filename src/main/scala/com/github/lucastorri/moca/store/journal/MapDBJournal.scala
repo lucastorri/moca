@@ -2,7 +2,7 @@ package com.github.lucastorri.moca.store.journal
 
 import java.nio.file._
 
-import akka.actor.{ExtendedActorSystem, ActorRef}
+import akka.actor.{ActorRef, ExtendedActorSystem}
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{AtomicWrite, PersistentRepr}
 import com.github.lucastorri.moca.store.serialization.KryoSerializer

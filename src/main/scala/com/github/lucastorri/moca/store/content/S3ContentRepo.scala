@@ -6,8 +6,8 @@ import java.nio.file.Files
 
 import com.amazonaws.ClientConfiguration
 import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.services.s3.{S3ClientOptions, AmazonS3Client}
 import com.amazonaws.services.s3.model._
+import com.amazonaws.services.s3.{AmazonS3Client, S3ClientOptions}
 import com.github.lucastorri.moca.browser.Content
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.store.content.S3ContentRepo._
