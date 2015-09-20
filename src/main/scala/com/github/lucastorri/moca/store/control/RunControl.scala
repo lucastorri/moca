@@ -10,7 +10,7 @@ trait RunControl {
 
   def add(works: Set[Work]): Future[Unit]
 
-  def abort(taskId: String): Future[Unit]
+  def abort(taskIds: Set[String]): Future[Unit]
 
   def subTasks(parentTaskId: String, depth: Int, urls: Set[Url]): Future[Unit]
 

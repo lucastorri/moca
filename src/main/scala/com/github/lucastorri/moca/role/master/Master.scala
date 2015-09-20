@@ -116,10 +116,8 @@ class Master(control: RunControl) extends PersistentActor with StrictLogging {
       logger.info(s"Worker down: $who")
       persist(WorkerDied(who)) { _ =>
         val taskIds = ongoing.ongoingTasks(who).map(_.taskId)
-        taskIds.foreach { taskId =>
-          control.abort(taskId).onFailure { case t =>  //TODO let control receive a set
-            logger.error("Could not release worker tasks", t)
-          }
+        control.abort(taskIds).onFailure { case t =>
+          logger.error("Could not release worker tasks", t)
         }
         ongoing = ongoing.cancel(who)
         scheduler = scheduler.release(taskIds)
@@ -130,7 +128,7 @@ class Master(control: RunControl) extends PersistentActor with StrictLogging {
       persist(fail) { _ =>
         ongoing = ongoing.cancel(who, taskId)
         scheduler = scheduler.release(Set(taskId))
-        control.abort(taskId).onFailure { case t =>
+        control.abort(Set(taskId)).onFailure { case t =>
           logger.error(s"Could not release $taskId", t)
         }
       }

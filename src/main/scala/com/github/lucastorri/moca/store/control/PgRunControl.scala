@@ -209,8 +209,15 @@ class PgRunControl(
     db.run(selectFinalResult(workId))
   }
 
-  override def abort(taskId: String): Future[Unit] = withRun(taskId) { run =>
-    db.run(selectTask(taskId, run.criteria)).map(_.foreach(task => publish(Set(task))))
+  override def abort(taskIds: Set[String]): Future[Unit] = {
+    val selects = taskIds.map { taskId =>
+      withRun(taskId) { run =>
+        db.run(selectTask(taskId, run.criteria))
+      }
+    }
+    Future.sequence(selects).map { results =>
+      publish(results.flatten)
+    }
   }
 
   override def close(): Unit = {

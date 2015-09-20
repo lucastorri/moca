@@ -205,7 +205,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
 
       val task = published.head
 
-      result(control.abort(task.id))
+      result(control.abort(Set(task.id)))
 
       published must have size 2
       published.head must equal (published.last)
