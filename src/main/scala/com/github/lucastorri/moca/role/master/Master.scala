@@ -36,12 +36,12 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
     logger.info("Master started")
     bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
-    bus.publish(MasterEvents, MasterUp)
+    system.eventStream.publish(MasterUp)
   }
 
   override def postStop(): Unit = {
     logger.info("Master going down")
-    bus.publish(MasterEvents, MasterDown)
+    system.eventStream.publish(MasterDown)
     repo.close()
     super.postStop()
   }

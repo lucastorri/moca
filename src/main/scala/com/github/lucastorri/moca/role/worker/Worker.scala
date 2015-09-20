@@ -10,7 +10,7 @@ import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.{Master, MasterDown, MasterUp}
+import com.github.lucastorri.moca.role.master.{MasterEvent, Master, MasterDown, MasterUp}
 import com.github.lucastorri.moca.role.worker.Worker._
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.url.Url
@@ -19,7 +19,7 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
+class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 15.seconds
@@ -32,7 +32,7 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
     logger.info("Worker started")
     self ! RequestWork
     mediator ! DistributedPubSubMediator.Subscribe(TasksAvailable.topic, self)
-    if (holdOnMasterUp) bus.subscribe(EventBus.MasterEvents) { e => self ! e }
+    if (holdOnMasterUp) system.eventStream.subscribe(self, classOf[MasterEvent])
   }
 
   override def postStop(): Unit = {
@@ -168,8 +168,8 @@ object Worker {
 
   val role = "worker"
 
-  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, bus: EventBus, holdOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props(new Worker(repo, browserProvider, partition, bus, holdOnMasterUp)), s"worker-$id")
+  def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, holdOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(new Worker(repo, browserProvider, partition, holdOnMasterUp)), s"worker-$id")
   }
 
   sealed trait State

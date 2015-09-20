@@ -21,7 +21,7 @@ object Moca extends App with StrictLogging {
   }
 
   if (config.hasRole(Worker.role)) {
-    val start = Worker.start(config.contentRepo, config.browserProvider, config.partition, config.bus, config.dedicatedMaster) _
+    val start = Worker.start(config.contentRepo, config.browserProvider, config.partition, config.dedicatedMaster) _
     (1 to config.workers).foreach(start)
   }
   
