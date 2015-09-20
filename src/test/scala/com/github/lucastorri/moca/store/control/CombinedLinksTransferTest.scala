@@ -2,7 +2,7 @@ package com.github.lucastorri.moca.store.control
 
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.url.Url
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 
 class CombinedLinksTransferTest extends FlatSpec with MustMatchers {
 

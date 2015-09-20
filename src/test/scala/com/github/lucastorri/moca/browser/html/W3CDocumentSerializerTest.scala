@@ -5,8 +5,9 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 import org.w3c.dom.Document
+
 import scala.collection.JavaConversions._
 
 class W3CDocumentSerializerTest extends FlatSpec with MustMatchers {

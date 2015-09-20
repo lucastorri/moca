@@ -1,7 +1,7 @@
 package com.github.lucastorri.moca.role.master.tasks
 
 import akka.actor.ActorRef
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 
 class TaskHandlerTest extends FlatSpec with MustMatchers {
 

@@ -1,6 +1,6 @@
 package com.github.lucastorri.moca.url
 
-import org.scalatest.{MustMatchers, FlatSpec}
+import org.scalatest.{FlatSpec, MustMatchers}
 
 class UrlTest extends FlatSpec with MustMatchers {
 
