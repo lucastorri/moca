@@ -20,6 +20,7 @@ libraryDependencies ++= Seq(
   "com.github.crawler-commons" % "crawler-commons" % "0.6",
   "io.mola.galimatias" % "galimatias" % "0.2.0",
   "org.jsoup" % "jsoup" % "1.8.3",
+  "org.jdom" % "jdom" % "2.0.2",
   "org.json4s" %% "json4s-jackson" % "3.2.11",
   "org.mapdb" % "mapdb" % "2.0-beta6",
   "com.esotericsoftware" % "kryo" % "3.0.3",

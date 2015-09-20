@@ -18,6 +18,7 @@ import javax.xml.transform.stream.StreamResult
 import javax.xml.transform.{OutputKeys, TransformerFactory}
 
 import com.github.lucastorri.moca.async.{runnable, spawn}
+import com.github.lucastorri.moca.browser.html.W3CDocumentSerializer
 import com.github.lucastorri.moca.browser.webkit.net._
 import com.github.lucastorri.moca.browser.{BrowserSettings, Content, JavascriptNotSupportedException, RenderedPage}
 import com.github.lucastorri.moca.url.Url
@@ -50,13 +51,7 @@ class BrowserWindow private[browser](settings: WebKitSettings, stage: Stage) ext
       if (url.isDefined && event.getValue == JFXWorker.State.SUCCEEDED) {
         html =
           try {
-            val transformer = TransformerFactory.newInstance().newTransformer()
-            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8")
-            transformer.setOutputProperty(OutputKeys.METHOD, "html")
-            val writer = new StringWriter()
-            transformer.transform(new DOMSource(webEngine.getDocument), new StreamResult(writer))
-            writer.flush()
-            writer.toString
+            W3CDocumentSerializer.toString(webEngine.getDocument)
           } catch { case e: Exception =>
             logger.error(s"Could not serialize html for $current", e)
             ""
