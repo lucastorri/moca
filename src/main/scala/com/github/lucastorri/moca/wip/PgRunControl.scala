@@ -20,10 +20,9 @@ import scala.util.Random
 class PgRunControl(
   config: Config,
   serializers: SerializerService,
-  publisher: TaskPublisher,
   partition: PartitionSelector,
   implicit val ec: ExecutionContext
-) extends RunControl(publisher) with PgRunControlSchema with StrictLogging { self =>
+) extends RunControl with PgRunControlSchema with StrictLogging { self =>
 
   import com.github.lucastorri.moca.store.work.PgDriver.api._
 

@@ -6,7 +6,7 @@ import com.github.lucastorri.moca.url.Url
 
 import scala.concurrent.Future
 
-abstract class RunControl(publisher: TaskPublisher) {
+trait RunControl {
 
   def add(works: Set[Work]): Future[Unit]
 
@@ -18,14 +18,17 @@ abstract class RunControl(publisher: TaskPublisher) {
 
   def links(workId: String): Future[Option[ContentLinksTransfer]]
 
-  final def publish(tasks: Set[Task]): Future[Unit] = publisher.push(tasks)
-
   def close(): Unit
 
-}
 
-trait TaskPublisher {
+  private var subscriber = Option.empty[Set[Task] => Unit]
 
-  def push(tasks: Set[Task]): Future[Unit]
+  def subscribe(subscriber: Set[Task] => Unit): Unit =
+    this.subscriber = Option(subscriber)
+
+  def hasSubscriber: Boolean =
+    subscriber.nonEmpty
+
+  def publish(tasks: Set[Task]): Unit = subscriber.foreach(f => f(tasks))
 
 }

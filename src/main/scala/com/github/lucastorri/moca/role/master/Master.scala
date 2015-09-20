@@ -7,8 +7,6 @@ import akka.pattern.ask
 import akka.persistence._
 import akka.util.Timeout
 import com.github.lucastorri.moca.async.retry
-import com.github.lucastorri.moca.event.EventBus
-import com.github.lucastorri.moca.event.EventBus.MasterEvents
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master._
@@ -20,7 +18,7 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Master(repo: RunControl, bus: EventBus) extends PersistentActor with StrictLogging {
+class Master(control: RunControl) extends PersistentActor with StrictLogging {
 
   import context._
   implicit val timeout: Timeout = 10.seconds
@@ -34,7 +32,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
 
   override def preStart(): Unit = {
     logger.info("Master started")
-    bus.subscribe(EventBus.NewTasks) { task => self ! NewTask(task) }
+    control.subscribe { tasks => self ! NewTasks(tasks) }
     system.scheduler.schedule(Master.pingInterval, Master.pingInterval, self, CleanUp)
     system.eventStream.publish(MasterUp)
   }
@@ -42,7 +40,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
   override def postStop(): Unit = {
     logger.info("Master going down")
     system.eventStream.publish(MasterDown)
-    repo.close()
+    control.close()
     super.postStop()
   }
 
@@ -55,8 +53,8 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
 
     case e: Event => e match {
 
-      case NewTask(task) =>
-        scheduler = scheduler.add(task)
+      case NewTasks(tasks) =>
+        scheduler = scheduler.add(tasks)
 
       case TaskStarted(who, taskId) =>
         ongoing = ongoing.start(who, taskId)
@@ -90,10 +88,10 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
 
   override def receiveCommand: Receive = {
 
-    case nt @ NewTask(task) =>
-      logger.trace(s"New task ${task.id}")
+    case nt @ NewTasks(tasks) =>
+      logger.trace(s"Scheduling new tasks ${tasks.map(_.id).mkString("[", ", ", "]")}")
       persist(nt) { _ =>
-        scheduler = scheduler.add(task)
+        scheduler = scheduler.add(tasks)
         mediator ! DistributedPubSubMediator.Publish(TasksAvailable.topic, TasksAvailable)
       }
 
@@ -119,7 +117,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
       persist(WorkerDied(who)) { _ =>
         val taskIds = ongoing.ongoingTasks(who).map(_.taskId)
         taskIds.foreach { taskId =>
-          repo.abort(taskId).onFailure { case t =>  //TODO let control receive a set
+          control.abort(taskId).onFailure { case t =>  //TODO let control receive a set
             logger.error("Could not release worker tasks", t)
           }
         }
@@ -132,7 +130,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
       persist(fail) { _ =>
         ongoing = ongoing.cancel(who, taskId)
         scheduler = scheduler.release(Set(taskId))
-        repo.abort(taskId).onFailure { case t =>
+        control.abort(taskId).onFailure { case t =>
           logger.error(s"Could not release $taskId", t)
         }
       }
@@ -145,7 +143,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
     case TaskFinished(who, taskId, transfer) =>
       logger.info(s"Task $taskId done")
       val messenger = sender()
-      repo.done(taskId, transfer).onComplete {
+      control.done(taskId, transfer).onComplete {
         case Success(finishedWorkId) =>
           finishedWorkId.foreach(id => logger.info(s"Finished run on work $id"))
           ack(messenger)
@@ -192,7 +190,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
     case AddWork(seeds) =>
       logger.trace("Adding new seeds")
       val messenger = sender()
-      repo.add(seeds).onComplete {
+      control.add(seeds).onComplete {
         case Success(_) =>
           ack(messenger)
         case Failure(t) =>
@@ -202,7 +200,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
 
     case AddSubTask(taskId, depth, urls) =>
       val messenger = sender()
-      repo.subTasks(taskId, depth, urls).onComplete {
+      control.subTasks(taskId, depth, urls).onComplete {
         case Success(_) =>
           ack(messenger)
         case Failure(t) =>
@@ -212,7 +210,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
 
     case GetLinks(taskId) =>
       val messenger = sender()
-      repo.links(taskId).onComplete {
+      control.links(taskId).onComplete {
         case Success(transfer) =>
           messenger ! WorkLinks(taskId, transfer)
         case Failure(t) =>
@@ -253,14 +251,14 @@ object Master {
     system.actorOf(ClusterSingletonProxy.props(path, settings))
   }
   
-  def standBy(repo: => RunControl, bus: EventBus)(implicit system: ActorSystem): Unit = {
+  def standBy(control: => RunControl)(implicit system: ActorSystem): Unit = {
     val settings = ClusterSingletonManagerSettings(system).withRole(role)
-    val manager = ClusterSingletonManager.props(Props(new Master(repo, bus)), PoisonPill, settings)
+    val manager = ClusterSingletonManager.props(Props(new Master(control)), PoisonPill, settings)
     system.actorOf(manager, name)
   }
 
   sealed trait Event
-  case class NewTask(task: Task) extends Event
+  case class NewTasks(tasks: Set[Task]) extends Event
   case class TaskStarted(who: ActorRef, taskId: String) extends Event
   case class TaskFailed(who: ActorRef, taskId: String) extends Event
   case class TaskDone(who: ActorRef, taskId: String) extends Event

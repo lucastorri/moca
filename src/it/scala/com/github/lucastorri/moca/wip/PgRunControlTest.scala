@@ -246,15 +246,9 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
 
     val published = mutable.ListBuffer.empty[Task]
 
-    val publisher = new TaskPublisher {
-      override def push(tasks: Set[Task]): Future[Unit] = {
-        published ++= tasks
-        Future.successful(())
-      }
-    }
-    
     def withControl(f: PgRunControl => Unit): Unit = {
-      val control = new PgRunControl(config, new KryoSerializerService(system), publisher, new ByHostPartitionSelector, system.dispatcher)
+      val control = new PgRunControl(config, new KryoSerializerService(system), new ByHostPartitionSelector, system.dispatcher)
+      control.subscribe(tasks => published ++= tasks)
       f(control)
       control.close()
     }

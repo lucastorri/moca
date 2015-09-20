@@ -6,15 +6,27 @@ case class PartitionScheduler(
   queues: Map[String, Seq[Task]], locked: Set[String], 
   partitions: Map[String, String], scheduled: Seq[Task], all: Set[String]) {
 
-  def add(task: Task): PartitionScheduler = {
-    if (all.contains(task.id)) {
-      this
-    } else if (locked.contains(task.partition)) {
-      val queue = queues.getOrElse(task.partition, Seq.empty) :+ task
-      copy(queues = queues + (task.partition -> queue), all = all + task.id)
-    } else {
-      copy(locked = locked + task.partition, scheduled = scheduled :+ task, all = all + task.id)
+  def add(tasks: Set[Task]): PartitionScheduler = {
+    var queuesCopy = queues
+    var allCopy = all
+    var lockedCopy = locked
+    var scheduledCopy = scheduled
+
+    tasks.foreach { task =>
+      if (!allCopy.contains(task.id)) {
+        if (lockedCopy.contains(task.partition)) {
+          val queue = queuesCopy.getOrElse(task.partition, Seq.empty) :+ task
+          queuesCopy = queuesCopy + (task.partition -> queue)
+          allCopy = allCopy + task.id
+        } else {
+          lockedCopy = lockedCopy + task.partition
+          scheduledCopy = scheduledCopy :+ task
+          allCopy = allCopy + task.id
+        }
+      }
     }
+
+    copy(queues = queuesCopy, all = allCopy, locked = lockedCopy, scheduled = scheduledCopy)
   }
 
   def next: Option[(Task, PartitionScheduler)] = {
