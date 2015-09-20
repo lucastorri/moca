@@ -170,7 +170,7 @@ trait PgRunControlSchema { self: PgRunControl =>
   }
 
   protected def selectTaskIdsAndPartitions(runId: String) = {
-    sql"select id, partition from task where run_id = run".as[(String, String)]
+    sql"select id, partition from task where run_id = $runId".as[(String, String)]
   }
 
   protected def selectTask(taskId: String, criteria: LinkSelectionCriteria) = {

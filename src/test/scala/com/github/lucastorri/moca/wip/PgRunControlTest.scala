@@ -39,164 +39,226 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
   }
 
   it must "add work" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example1.com/"), FakeCriteria),
-      Work("2", Url("http://www.example2.com/"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example1.com/"), FakeCriteria),
+        Work("2", Url("http://www.example2.com/"), FakeCriteria))))
 
-    publisher.buffer must have size 2
+      published must have size 2
 
-    val expectedSeeds = publisher.buffer.flatMap(_.seeds).map(_.toString).sorted
-    expectedSeeds must equal (Seq("http://www.example1.com/", "http://www.example2.com/"))
+      val expectedSeeds = published.flatMap(_.seeds).map(_.toString).sorted
+      expectedSeeds must equal(Seq("http://www.example1.com/", "http://www.example2.com/"))
 
-    control.close()
+    }
   }
 
   it must "not add currently running work" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com"), FakeCriteria),
-      Work("2", Url("http://www.example.com"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com"), FakeCriteria),
+        Work("2", Url("http://www.example.com"), FakeCriteria))))
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com"), FakeCriteria),
-      Work("2", Url("http://www.example.com"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com"), FakeCriteria),
+        Work("2", Url("http://www.example.com"), FakeCriteria))))
 
-    publisher.buffer must have size 2
+      published must have size 2
 
-    control.close()
+    }
   }
 
   it must "add a new task if partition is not busy" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com/"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com/"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    result(control.subTasks(task.id, 1, Set(Url("http://www.example1.com/"))))
+      result(control.subTasks(task.id, 1, Set(Url("http://www.example1.com/"))))
 
-    publisher.buffer must have size 2
-    publisher.buffer.last.seeds must equal (Set(Url("http://www.example1.com/")))
+      published must have size 2
+      published.last.seeds must equal (Set(Url("http://www.example1.com/")))
 
-    control.close()
+    }
   }
 
   it must "not schedule a task if the partition is busy" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com/"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com/"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    result(control.subTasks(task.id, 1, Set(Url("http://www.example.com/other-path"))))
+      result(control.subTasks(task.id, 1, Set(Url("http://www.example.com/other-path"))))
 
-    publisher.buffer must have size 1
+      published must have size 1
 
-    control.close()
+    }
   }
 
   it must "complain when completing a non existing task" in new context {
+    withControl { control =>
 
-    val r = control.done("blah", FakeTransfer())
+      val r = control.done("blah", FakeTransfer())
 
-    an[Exception] must be thrownBy { result(r) }
+      an[Exception] must be thrownBy { result(r) }
 
-    control.close()
+    }
   }
 
   it must "complete a non final task" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example1.com"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example1.com"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    result(control.subTasks(task.id, 1, Set(Url("http://www.example2.com"))))
+      result(control.subTasks(task.id, 1, Set(Url("http://www.example2.com"))))
 
-    result(control.done(task.id, FakeTransfer())) must be (None)
-    result(control.links("1")) must be (None)
+      result(control.done(task.id, FakeTransfer())) must be (None)
+      result(control.links("1")) must be (None)
 
-    control.close()
+    }
   }
 
   it must "not schedule an awaiting busy partition if results have a shallower depth" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    val url = Url("http://www.example.com/another-url")
-    result(control.subTasks(task.id, 1, Set(url)))
-    publisher.buffer must have size 1
+      val url = Url("http://www.example.com/another-url")
+      result(control.subTasks(task.id, 1, Set(url)))
+      published must have size 1
 
-    result(control.done(task.id, FakeTransfer(ContentLink(url, "", 1, "")))) must be (Some("1"))
+      result(control.done(task.id, FakeTransfer(ContentLink(url, "", 1, "")))) must be (Some("1"))
 
-
-    control.close()
+    }
   }
 
   it must "schedule an awaiting busy partition" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("1", Url("http://www.example.com"), FakeCriteria))))
+      result(control.add(Set(
+        Work("1", Url("http://www.example.com"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    val url = Url("http://www.example.com/another-url")
-    result(control.subTasks(task.id, 1, Set(url)))
-    publisher.buffer must have size 1
+      val url = Url("http://www.example.com/another-url")
+      result(control.subTasks(task.id, 1, Set(url)))
+      published must have size 1
 
-    result(control.done(task.id, FakeTransfer(ContentLink(url, "", 2, "")))) must be (None)
+      result(control.done(task.id, FakeTransfer(ContentLink(url, "", 2, "")))) must be (None)
 
-    publisher.buffer must have size 2
-    publisher.buffer.last.seeds must equal (Set(url))
+      published must have size 2
+      published.last.seeds must equal (Set(url))
 
-    result(control.done(publisher.buffer.last.id, FakeTransfer())) must be (Some("1"))
+      result(control.done(published.last.id, FakeTransfer())) must be (Some("1"))
 
-    control.close()
+    }
   }
 
   it must "return fetched content for work" in new context {
-    //TODO
+    withControl { control =>
+
+      result(control.add(Set(
+        Work("1", Url("http://www.example1.com"), FakeCriteria),
+        Work("2", Url("http://www.example2.com"), FakeCriteria))))
+
+      val task1 = published.head
+      val task2 = published.last
+
+      result(control.subTasks(task1.id, 1, Set(Url("http://www.example3.com/"))))
+      result(control.subTasks(task2.id, 1, Set(Url("http://www.example3.com/"))))
+      result(control.subTasks(task1.id, 2, Set(Url("http://www.example1.com/test"))))
+
+      published.foreach { t =>
+        val links = t.seeds.map(url => ContentLink(url, "", t.initialDepth, "")).toSeq
+        result(control.done(t.id, FakeTransfer(links: _*)))
+      }
+
+      result(control.links("1")).get.contents.toSet must equal (Set(
+        ContentLink(Url("http://www.example1.com"), "", 0, ""),
+        ContentLink(Url("http://www.example3.com"), "", 1, ""),
+        ContentLink(Url("http://www.example1.com/test"), "", 2, "")))
+
+      result(control.links("2")).get.contents.toSet must equal (Set(
+        ContentLink(Url("http://www.example2.com"), "", 0, ""),
+        ContentLink(Url("http://www.example3.com"), "", 1, "")))
+
+    }
   }
 
   it must "republish a task if it was aborted" in new context {
+    withControl { control =>
 
-    result(control.add(Set(
-      Work("7", Url("http://www.example.com/"), FakeCriteria))))
+      result(control.add(Set(
+        Work("7", Url("http://www.example.com/"), FakeCriteria))))
 
-    val task = publisher.buffer.head
+      val task = published.head
 
-    result(control.abort(task.id))
+      result(control.abort(task.id))
 
-    publisher.buffer must have size 2
-    publisher.buffer.head must equal (publisher.buffer.last)
+      published must have size 2
+      published.head must equal (published.last)
 
-    result(control.done(task.id, FakeTransfer())) must equal (Some("7"))
+      result(control.done(task.id, FakeTransfer())) must equal (Some("7"))
 
-    control.close()
+    }
   }
 
-  //TODO have two awaiting partitions
+  it must "continue after restart" in new context {
+    withControl { control =>
 
-  //TODO test restart
+      result(control.add(Set(Work("3", Url("http://www.example1.com/"), FakeCriteria))))
+      
+      result(control.subTasks(published.head.id, 1, Set(Url("http://www.example2.com/"))))
+
+      result(control.subTasks(published.last.id, 2, Set(Url("http://www.example1.com/other-url"))))
+      
+    }
+    withControl { control =>
+
+      result(control.done(published.head.id,
+        FakeTransfer(ContentLink(Url("http://www.example1.com/other-url"), "", 3, ""))))
+
+      val last = published.last
+      (last.seeds -> last.initialDepth) must equal (Set(Url("http://www.example1.com/other-url")) -> 2)
+
+      val done = published.tail.map { t =>
+        result(control.done(t.id, FakeTransfer()))
+      }
+
+      done must equal (Seq(None, Some("3")))
+
+    }
+  }
 
   trait context {
 
+    val published = mutable.ListBuffer.empty[Task]
+
     val publisher = new TaskPublisher {
-      val buffer = mutable.ListBuffer.empty[Task]
       override def push(tasks: Set[Task]): Future[Unit] = {
-        buffer ++= tasks
+        published ++= tasks
         Future.successful(())
       }
     }
-
-    val control = new PgRunControl(config, new KryoSerializerService(system), publisher, new ByHostPartitionSelector, system.dispatcher)
+    
+    def withControl(f: PgRunControl => Unit): Unit = {
+      val control = new PgRunControl(config, new KryoSerializerService(system), publisher, new ByHostPartitionSelector, system.dispatcher)
+      f(control)
+      control.close()
+    }
 
   }
-
 
   def result[T](f: Future[T]): T = Await.result(f, 5.seconds)
 

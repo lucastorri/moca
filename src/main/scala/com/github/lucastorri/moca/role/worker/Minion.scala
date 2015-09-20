@@ -117,7 +117,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
       .partition(link => partition.same(task, link.url))
 
     toFwd.foreach(markFetched)
-    if (toFwd.nonEmpty) parent ! Partition(toFwd)
+    if (toFwd.nonEmpty) parent ! Partition(toFwd) //TODO block on master response, and then continue, otherwise fail
 
     toAdd.foreach(l => if (!outstanding.contains(l)) outstanding += l)
   }
