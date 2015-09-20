@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.wip
+package com.github.lucastorri.moca.store.control
 
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.browser.RenderedPage
@@ -18,12 +18,12 @@ import scala.concurrent.{Await, Future}
 
 class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEach {
 
-  import com.github.lucastorri.moca.store.work.PgDriver.api._
+  import com.github.lucastorri.moca.store.control.PgDriver.api._
 
   val system = ActorSystem()
 
   val config = ConfigFactory.parseString(
-    """class = "com.github.lucastorri.moca.wip.PgRunControl"
+    """class = "com.github.lucastorri.moca.store.control.PgRunControl"
       |  connection {
       |  dataSourceClass = "org.postgresql.ds.PGSimpleDataSource"
       |  properties {

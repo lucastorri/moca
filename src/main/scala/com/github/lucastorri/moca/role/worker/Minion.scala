@@ -1,5 +1,6 @@
 package com.github.lucastorri.moca.role.worker
 
+import akka.pattern.ask
 import akka.persistence.{PersistentActor, RecoveryCompleted}
 import akka.util.Timeout
 import com.github.lucastorri.moca.browser.{Browser, Content}
@@ -12,7 +13,6 @@ import com.github.lucastorri.moca.store.content.TaskContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
-import akka.pattern.ask
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}

@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.store.work
+package com.github.lucastorri.moca.store.control
 
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.url.Url

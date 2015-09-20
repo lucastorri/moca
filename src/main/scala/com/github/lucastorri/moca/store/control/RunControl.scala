@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.wip
+package com.github.lucastorri.moca.store.control
 
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer

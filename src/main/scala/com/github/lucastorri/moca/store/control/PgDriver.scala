@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.store.work
+package com.github.lucastorri.moca.store.control
 
 import com.github.tminglei.slickpg.PgArraySupport
 import com.github.tminglei.slickpg.utils.SimpleArrayUtils._

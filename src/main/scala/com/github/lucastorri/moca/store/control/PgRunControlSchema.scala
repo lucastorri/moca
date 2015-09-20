@@ -1,4 +1,4 @@
-package com.github.lucastorri.moca.wip
+package com.github.lucastorri.moca.store.control
 
 import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.role.{Task, Work}
@@ -7,7 +7,7 @@ import com.github.lucastorri.moca.url.Url
 
 trait PgRunControlSchema { self: PgRunControl =>
 
-  import com.github.lucastorri.moca.store.work.PgDriver.api._
+  import com.github.lucastorri.moca.store.control.PgDriver.api._
 
 
   protected def createWorkTable: DBIO[Int] =
@@ -186,6 +186,5 @@ trait PgRunControlSchema { self: PgRunControl =>
   protected def deleteTasks(runId: String) = {
     sqlu"delete from task where run_id = $runId"
   }
-
 
 }

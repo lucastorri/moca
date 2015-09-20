@@ -6,7 +6,6 @@ import java.nio.charset.Charset
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.browser.{BrowserProvider, BrowserSettings}
 import com.github.lucastorri.moca.config.MocaConfig._
-import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
@@ -14,9 +13,8 @@ import com.github.lucastorri.moca.role.master.Master
 import com.github.lucastorri.moca.role.worker.Worker
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
+import com.github.lucastorri.moca.store.control.RunControl
 import com.github.lucastorri.moca.store.serialization.SerializerService
-import com.github.lucastorri.moca.store.work.WorkRepo
-import com.github.lucastorri.moca.wip.RunControl
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.concurrent.ExecutionContext
@@ -77,24 +75,13 @@ case class MocaConfig(
   lazy val system: ActorSystem =
     ActorSystem(systemName, main)
 
-  def workRepo: WorkRepo = {
-    val repoConfig = main.getConfig(main.getString("moca.work-repo-id"))
-    val build = ClassBuilder.fromConfig(repoConfig,
-      classOf[ActorSystem] -> system,
-      classOf[PartitionSelector] -> partition,
-      classOf[SerializerService] -> serializerService,
-      classOf[EventBus] -> bus)
-
-    build()
-  }
 
   def runControl: RunControl = {
     val controlConfig = main.getConfig(main.getString("moca.run-control-id"))
     val build = ClassBuilder.fromConfig(controlConfig,
       classOf[ExecutionContext] -> system.dispatcher,
       classOf[PartitionSelector] -> partition,
-      classOf[SerializerService] -> serializerService,
-      classOf[EventBus] -> bus)
+      classOf[SerializerService] -> serializerService)
 
     build()
   }
@@ -138,13 +125,6 @@ case class MocaConfig(
       Charset.forName(baseConfig.getString("html-charset")),
       Duration.fromNanos(baseConfig.getDuration("load-timeout").toNanos),
       baseConfig.getString("user-agent"))
-  }
-
-  lazy val bus: EventBus = {
-    val busConfig = main.getConfig(main.getString("moca.event-bus-id"))
-    val build = ClassBuilder.fromConfig(busConfig)
-
-    build()
   }
   
   lazy val serializerService: SerializerService = {

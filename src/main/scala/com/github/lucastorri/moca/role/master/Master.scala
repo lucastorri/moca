@@ -12,7 +12,7 @@ import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.Master._
 import com.github.lucastorri.moca.role.master.scheduler.PartitionScheduler
 import com.github.lucastorri.moca.role.master.tasks.TaskHandler
-import com.github.lucastorri.moca.wip.RunControl
+import com.github.lucastorri.moca.store.control.RunControl
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration._

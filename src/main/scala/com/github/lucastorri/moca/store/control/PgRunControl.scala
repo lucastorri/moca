@@ -1,17 +1,17 @@
-package com.github.lucastorri.moca.wip
+package com.github.lucastorri.moca.store.control
 
 import java.util.concurrent.Semaphore
 
 import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.{Task, Work}
-import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
+import com.github.lucastorri.moca.store.content.ContentLinksTransfer
 import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.async.Async.{async, await}
+import scala.async.Async._
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -24,7 +24,7 @@ class PgRunControl(
   implicit val ec: ExecutionContext
 ) extends RunControl with PgRunControlSchema with StrictLogging { self =>
 
-  import com.github.lucastorri.moca.store.work.PgDriver.api._
+  import com.github.lucastorri.moca.store.control.PgDriver.api._
 
   protected val db = Database.forConfig("connection", config)
   protected val ws = serializers.create[CriteriaHolder]
@@ -248,13 +248,13 @@ class PgRunControl(
     def finishTask(taskId: String): Unit = {
       taskIdPartition.remove(taskId).foreach(partitionTaskId.remove)
     }
-    
+
     def hasPartition(partition: String): Boolean =
       partitionTaskId.contains(partition)
-    
+
     def hasOtherTasks: Boolean =
       partitionTaskId.size > 1
-    
+
     def partition(taskId: String): String =
       taskIdPartition(taskId)
 
@@ -268,7 +268,7 @@ class PgRunControl(
         lock.release()
         Future.failed(e)
       }
-    } 
+    }
 
   }
 
@@ -352,11 +352,6 @@ class PgRunControl(
 
 }
 
-case class CriteriaHolder(criteria: LinkSelectionCriteria)
 case class ContentLinksTransferHolder(transfer: ContentLinksTransfer)
 
-case class CombinedLinksTransfer(transfers: Seq[ContentLinksTransfer]) extends ContentLinksTransfer {
-
-  override def contents: Stream[ContentLink] = transfers.toStream.flatMap(_.contents)
-
-}
+case class CriteriaHolder(criteria: LinkSelectionCriteria)

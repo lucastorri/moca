@@ -6,11 +6,10 @@ import akka.pattern.ask
 import akka.util.{Timeout => AskTimeout}
 import com.github.lucastorri.moca.async.retry
 import com.github.lucastorri.moca.browser.BrowserProvider
-import com.github.lucastorri.moca.event.EventBus
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.Task
-import com.github.lucastorri.moca.role.master.{MasterEvent, Master, MasterDown, MasterUp}
+import com.github.lucastorri.moca.role.master.{Master, MasterDown, MasterEvent, MasterUp}
 import com.github.lucastorri.moca.role.worker.Worker._
 import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.url.Url
