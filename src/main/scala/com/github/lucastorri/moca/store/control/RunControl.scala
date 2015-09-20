@@ -29,6 +29,6 @@ trait RunControl {
   def hasSubscriber: Boolean =
     subscriber.nonEmpty
 
-  def publish(tasks: Set[Task]): Unit = subscriber.foreach(f => f(tasks))
+  def publish(tasks: Set[Task]): Unit = subscriber.foreach(f => if (tasks.nonEmpty) f(tasks))
 
 }
