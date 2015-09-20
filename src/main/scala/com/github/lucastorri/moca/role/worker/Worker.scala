@@ -16,7 +16,6 @@ import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -71,23 +70,28 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       stay()
 
     case Event(Done, _) =>
-      sender() ! PoisonPill
+      val minion = sender()
       val transfer = repo.links(stateData)
       retry(3)(master ? TaskFinished(self, stateData.id, transfer)).acked().onComplete {
         case Success(_) =>
+          minion ! Continue
           self ! Finished
         case Failure(t) =>
           logger.error("Could not update master of finished task", t)
-          //TODO fail
-          self ! Finished
+          minion ! Abort
+          self ! Abort
       }
       stay()
 
     case Event(Partition(urls, depth), _) =>
-      val taskAdd = retry(3)(master ? AddSubTask(stateData.id, depth, urls)).acked()
-      taskAdd.onFailure { case t =>
-        logger.error("Could not add sub-tasks and will abort task", t)
-        self ! Abort
+      val minion = sender()
+      retry(3)(master ? AddSubTask(stateData.id, depth, urls)).acked().onComplete {
+        case Success(_) =>
+          minion ! Continue
+        case Failure(t) =>
+          logger.error("Could not add sub-tasks and will abort task", t)
+          minion ! Abort
+          self ! Abort
       }
       stay()
 
@@ -100,9 +104,11 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       stay()
 
     case Event(Finished, _) =>
+      stopMinion()
       goto(State.Idle) using null
 
     case Event(MasterUp, _) =>
+      abortTask()
       goto(State.OnHold) using null
 
   }
@@ -136,7 +142,6 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
 
     case State.Working -> State.OnHold =>
       logger.info(s"Stopping task ${stateData.id}")
-      abortTask()
 
     case State.Idle -> State.OnHold =>
       logger.info("Holding worker")
@@ -150,7 +155,11 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
 
   private def abortTask(): Unit = {
     retry(3)(master ? AbortTask(self, stateData.id))
-    children.foreach(context.stop)
+    stopMinion()
+  }
+
+  private def stopMinion(): Unit = {
+    children.foreach(_ ! PoisonPill)
   }
 
 }
@@ -175,5 +184,6 @@ object Worker {
   case object Abort
   case object Finished
   case class Partition(urls: Set[Url], depth: Int)
+  case object Continue
 
 }

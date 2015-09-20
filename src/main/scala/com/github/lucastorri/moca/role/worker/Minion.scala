@@ -1,18 +1,21 @@
 package com.github.lucastorri.moca.role.worker
 
 import akka.persistence.{PersistentActor, RecoveryCompleted}
+import akka.util.Timeout
 import com.github.lucastorri.moca.browser.{Browser, Content}
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.worker.Minion.Event.{Fetched, Found, NotFetched}
 import com.github.lucastorri.moca.role.worker.Minion.{Event, Next}
-import com.github.lucastorri.moca.role.worker.Worker.{Done, Partition}
+import com.github.lucastorri.moca.role.worker.Worker.{Continue, Done, Partition}
 import com.github.lucastorri.moca.store.content.TaskContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
+import akka.pattern.ask
 import scala.collection.mutable
-import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
 
 class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: PartitionSelector) extends PersistentActor with StrictLogging {
@@ -125,8 +128,8 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
         }
       }
 
-    if (inAnotherPartition.nonEmpty) { //TODO block on master response, and then continue, otherwise fail
-      parent ! Partition(inAnotherPartition, found.depth)
+    if (inAnotherPartition.nonEmpty) {
+      notify(Partition(inAnotherPartition, found.depth))
     }
   }
 
@@ -140,12 +143,18 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   def finish(): Unit = {
+    notify(Done)
     deleteMessages(lastSequenceNr)
-    parent ! Done
   }
 
   override def unhandled(message: Any): Unit = message match {
     case _ => logger.error(s"Unknown message $message")
+  }
+
+  private def notify(msg: Any): Unit = {
+    implicit val timeout: Timeout = 1.hour
+    try Await.result((parent ? msg).filter(_ == Continue), timeout.duration)
+    catch { case e: Exception => context.stop(self); throw e }
   }
 
   override val persistenceId: String = s"minion-${task.id}"
