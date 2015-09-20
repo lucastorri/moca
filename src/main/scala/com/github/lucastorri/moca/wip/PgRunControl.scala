@@ -13,8 +13,8 @@ import com.typesafe.scalalogging.StrictLogging
 
 import scala.async.Async.{async, await}
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Await, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Random
 
 class PgRunControl(
@@ -22,19 +22,15 @@ class PgRunControl(
   serializers: SerializerService,
   publisher: TaskPublisher,
   partition: PartitionSelector,
-  ec: ExecutionContext
-) extends RunControl(publisher) with StrictLogging { self =>
-
-  implicit val ec2 = ec
+  implicit val ec: ExecutionContext
+) extends RunControl(publisher) with PgRunControlSchema with StrictLogging { self =>
 
   import com.github.lucastorri.moca.store.work.PgDriver.api._
 
-  private val db = Database.forConfig("connection", config)
-  private val ws = serializers.create[CriteriaHolder]
-  private val ts = serializers.create[ContentLinksTransferHolder]
-
-  private val runningWorkIds = mutable.HashSet.empty[String]
-  private val running = mutable.HashMap.empty[String, Run]
+  protected val db = Database.forConfig("connection", config)
+  protected val ws = serializers.create[CriteriaHolder]
+  protected val ts = serializers.create[ContentLinksTransferHolder]
+  private val running = new RunSet
 
   private def init(): Future[Unit] = async {
     await(db.run(DBIO.seq(
@@ -47,40 +43,44 @@ class PgRunControl(
       createFinalResultTable
     ).transactionally))
 
-
     val loaded = await(db.run(selectAllRuns)).map { run =>
-      db.run(selectTaskIdsAndPartitions(run.id)).map(idsAndPartitions => run -> idsAndPartitions)
+      val selectData =
+        for {
+          idsAndPartitions <- selectTaskIdsAndPartitions(run.id)
+          depths <- selectUrlDepths(run.id)
+        } yield (idsAndPartitions, depths)
+      db.run(selectData).map(data => run -> data)
     }
 
-    await(Future.sequence(loaded)).foreach { case (run, idsAndPartitions) =>
+    await(Future.sequence(loaded)).foreach { case (run, (idsAndPartitions, depths)) =>
       idsAndPartitions.foreach { case (taskId, part) =>
         run.addTask(part, taskId)
+        run.depths.project(depths.map { case (url, depth) => (url, partition(url)) -> depth }.toMap).commit()
       }
-      running.put(run.id, run)
-      runningWorkIds.add(run.workId)
+      running.add(run)
     }
   }
 
   Await.result(init(), config.getDuration("init-timeout").toMillis.millis)
 
 
-  override def add(works: Set[Work]): Future[Unit] = { //TODO synchronized on whole future for `running`
+  override def add(works: Set[Work]): Future[Unit] = {
     val newRuns = mutable.ListBuffer.empty[(Run, Task)]
     val inserts = works.toSeq.flatMap { work =>
-      if (runningWorkIds.contains(work.id)) {
+      if (running.hasWork(work.id)) {
         logger.trace(s"Skipping start of already running work ${work.id}")
         Seq.empty
       } else {
         val run = Run(Id.newRunId, work.id, work.criteria)
         val task = Task(Id.newTaskId(run.id), Set(work.seed), work.criteria, 0, partition(work.seed))
         newRuns.append(run -> task)
-        Seq(insertWork(work), insertRun(run), insertTask(run.id, task))
+        Seq(insertWork(work), insertRun(run), insertTask(run.id, task), insertUrlDepth(run.id, work.seed, 0))
       }
     }
 
     db.run(DBIO.sequence(inserts).transactionally).map { _ =>
       val tasks = newRuns.map { case (run, task) =>
-        running.put(run.id, run)
+        running.add(run)
         run.addTask(task.partition, task.id)
         task
       }
@@ -93,24 +93,32 @@ class PgRunControl(
 
     val currentDepths = run.depths
 
-    val urlsWithDepth = urls.map(url => (url, partition(url)) -> depth).toMap
-    val betterUrls = urlsWithDepth
-      .filter { case ((url, part), d) => currentDepths.depthStatus(url, part, d).isBetter }
+    val depthStatus = urls.map(url => (url, partition(url)) -> depth).toMap
+      .groupBy { case ((url, part), d) => currentDepths.depthStatus(url, part, d) }
+      .withDefaultValue(Map.empty)
+
+    val betterUrls = (depthStatus(NewDepth) ++ depthStatus(SmallerDepth))
       .map { case ((url, _), _) => url }
       .toSet
 
-    val inserts = betterUrls.groupBy(partition.apply).flatMap { case (part, group) =>
+    val usedUrls = mutable.HashMap.empty[(Url, String), Int]
+
+    val updates = betterUrls.groupBy(partition.apply).flatMap { case (part, group) =>
       if (run.hasPartition(part)) {
         group.map(url => insertOutstandingUrl(run.id, url, depth, part))
       } else {
         val task = Task(Id.newTaskId(run.id), group, run.criteria, depth, part)
         newTasks.append(task)
-        Seq(insertTask(run.id, task))
+        insertTask(run.id, task) +: group.map { url =>
+          usedUrls.put(url -> part, depth)
+          if (depthStatus(NewDepth).contains(url -> part)) insertUrlDepth(run.id, url, depth)
+          else updateUrlDepth(run.id, url, depth)
+        }.toSeq
       }
     }
 
-    db.run(DBIO.sequence(inserts).transactionally).map { _ =>
-      currentDepths.project(urlsWithDepth).commit()
+    db.run(DBIO.sequence(updates).transactionally).map { _ =>
+      currentDepths.project(usedUrls.toMap).commit()
       publish(run, newTasks.toSet)
     }
   }
@@ -125,34 +133,33 @@ class PgRunControl(
     async {
 
       val outstanding = await(db.run(selectOutstandingUrls(run.id, run.partition(taskId))))
-      val hasTasksLeft = run.hasOtherTasks || outstanding.nonEmpty
+      val depthStatus = outstanding
+        .groupBy { case (url, depth) => projectedDepths.depthStatus(url, part, depth) }
+        .withDefaultValue(Seq.empty)
+
+      val better = depthStatus(NewDepth) ++ depthStatus(SmallerDepth)
+      val worse = depthStatus(IgnoredDepth)
+
+      val outstandingToDelete = mutable.HashSet.empty[(Url, Int)] ++ worse
+
+      val outstandingCandidates = better.groupBy { case (url, _) => url }
+        .values
+        .map { urls =>
+        val sorted = urls.distinct.sortBy { case (_, depth) => depth }
+        outstandingToDelete ++= sorted.tail
+        sorted.head
+      }
+
+      val hasTasksLeft = run.hasOtherTasks || outstandingCandidates.nonEmpty
 
       val update =
         if (hasTasksLeft) {
-
-          val depthStatus = outstanding
-              .groupBy { case (url, depth) => projectedDepths.depthStatus(url, part, depth) }
-              .withDefaultValue(Seq.empty)
-
-          val better = depthStatus(NewDepth) ++ depthStatus(SmallerDepth)
-          val worse = depthStatus(IgnoredDepth)
-
-          val outstandingToDelete = mutable.HashSet.empty[(Url, Int)] ++ worse
-
-          val candidates = better.groupBy { case (url, _) => url }
-            .values
-            .map { urls =>
-              val sorted = urls.distinct.sortBy { case (_, depth) => depth }
-              outstandingToDelete ++= sorted.tail
-              sorted.head
-            }
-
           val taskToInsert =
-            if (candidates.isEmpty) {
+            if (outstandingCandidates.isEmpty) {
               None
             } else {
-              val (_, shallowestDepth) = candidates.minBy { case (_, depth) => depth }
-              val newTaskSeeds = candidates
+              val (_, shallowestDepth) = outstandingCandidates.minBy { case (_, depth) => depth }
+              val newTaskSeeds = outstandingCandidates
                 .filter { case (_, depth) => depth == shallowestDepth }
                 .map { case (url, _) => url }
                 .toSet
@@ -190,7 +197,7 @@ class PgRunControl(
             insertFinalResult(run.workId, finalTransfer))
 
           db.run(DBIO.sequence(updates).transactionally).map { _ =>
-            runningWorkIds.remove(run.workId)
+            running.remove(run)
             Some(run.workId)
           }
         }
@@ -204,9 +211,7 @@ class PgRunControl(
   }
 
   override def abort(taskId: String): Future[Unit] = withRun(taskId) { run =>
-    async {
-      await(db.run(selectTask(taskId, run.criteria))).foreach(task => publish(Set(task)))
-    }
+    db.run(selectTask(taskId, run.criteria)).map(_.foreach(task => publish(Set(task))))
   }
 
   override def close(): Unit = {
@@ -214,9 +219,7 @@ class PgRunControl(
   }
 
   private def publish(run: Run, tasks: Set[Task]): Unit = {
-    tasks.foreach { task =>
-      run.addTask(task.partition, task.id)
-    }
+    tasks.foreach(task => run.addTask(task.partition, task.id))
     publish(tasks)
   }
 
@@ -226,177 +229,6 @@ class PgRunControl(
       case Some(run) => run.exec(f(run))
       case None => Future.failed(new RuntimeException(s"Run $runId not found"))
     }
-  }
-
-  private def createWorkTable: DBIO[Int] =
-    sqlu"""
-           create table if not exists work(
-              id varchar(256) not null primary key,
-              seed varchar(2048) not null,
-              criteria bytea not null)
-        """
-
-  private def insertWork(work: Work) = {
-    val serializedCriteria = ws.serialize(CriteriaHolder(work.criteria))
-    sqlu"""insert into work (id, seed, criteria) values (${work.id}, ${work.seed.toString}, $serializedCriteria)"""
-  }
-
-
-  private def createUrlDepthTable: DBIO[Int] =
-    sqlu"""
-           create table if not exists url_depth(
-              run_id varchar(128) not null,
-              url varchar(1024) not null,
-              depth integer not null,
-              foreign key(run_id) references run(id),
-              primary key(run_id, url))
-        """
-
-  private def insertUrlDepth(runId: String, url: Url, depth: Int): DBIO[Int] =
-    sqlu"""insert into url_depth (run_id, url, depth) values ($runId, ${url.toString}, $depth)"""
-
-  private def updateUrlDepth(runId: String, url: Url, depth: Int): DBIO[Int] =
-    sqlu"""update url_depth set depth = $depth where run_id = $runId and url = ${url.toString}"""
-
-  private def deleteUrlDepths(runId: String) = {
-    sqlu"delete from url_depth where run_id = $runId"
-  }
-
-
-  private def createRunTable: DBIO[Int] =
-    sqlu"""
-           create table if not exists run(
-              id varchar(128) not null primary key,
-              work_id varchar(256) not null,
-              criteria bytea not null,
-              foreign key(work_id) references work(id))
-        """
-
-  private def insertRun(run: Run) = {
-    val serializedCriteria = ws.serialize(CriteriaHolder(run.criteria))
-    sqlu"insert into run (id, work_id, criteria) values (${run.id}, ${run.workId}, $serializedCriteria)"
-  }
-
-  private def deleteRun(runId: String) = {
-    sqlu"delete from run where id = $runId"
-  }
-
-  private def selectAllRuns = {
-    sql"select id, work_id, criteria from run".as[(String, String, Array[Byte])].map { results =>
-      results.map { case (id, workId, serializedCriteria) =>
-        Run(id, workId, ws.deserialize(serializedCriteria).criteria)
-      }
-    }
-  }
-
-  private def selectTaskIdsAndPartitions(runId: String) = {
-    sql"select id, partition from task where run_id = run".as[(String, String)]
-  }
-
-
-  private def createOutstandingUrlTable: DBIO[Int] =
-    sqlu"""
-           create table if not exists outstanding_url(
-              run_id varchar(128) not null,
-              url varchar(1024) not null,
-              depth integer not null,
-              partition varchar(256) not null,
-              foreign key(run_id) references run(id),
-              primary key(run_id, url))
-        """
-
-  private def insertOutstandingUrl(runId: String, url: Url, depth: Int, partition: String) = {
-    sqlu"insert into outstanding_url(run_id, url, depth, partition) values ($runId, ${url.toString}, $depth, $partition)"
-  }
-
-  private def deleteOutstandingUrl(runId: String, url: Url, depth: Int, partition: String) = {
-    sqlu"delete from outstanding_url where run_id = $runId, url = ${url.toString}, depth = $depth, partition = $partition"
-  }
-
-  private def deleteOutstandingUrl(runId: String) = {
-    sqlu"delete from outstanding_url where run_id = $runId"
-  }
-
-  private def selectOutstandingUrls(runId: String, partition: String) = {
-    sql"select url, depth from outstanding_url where run_id = $runId and partition = $partition".as[(String, Int)]
-      .map(_.map { case (url, depth) => Url(url) -> depth })
-  }
-
-
-  private def createFinalResultTable =
-    sqlu"""
-           create table if not exists final_result(
-              id bigserial primary key,
-              work_id varchar(256) not null,
-              transfer bytea not null,
-              foreign key(work_id) references work(id))
-        """
-
-  private def insertFinalResult(workId: String, transfer: ContentLinksTransfer) = {
-    val serializedTransfer = ts.serialize(ContentLinksTransferHolder(transfer))
-    sqlu"insert into final_result (work_id, transfer) values ($workId, $serializedTransfer)"
-  }
-
-  private def selectFinalResult(workId: String) = {
-    sql"select transfer from final_result where work_id = $workId order by id desc".as[Array[Byte]]
-      .headOption
-      .map(_.map(bytes => ts.deserialize(bytes).transfer))
-  }
-
-
-  private def createPartialResultTable =
-    sqlu"""
-           create table if not exists partial_result(
-              id bigserial primary key,
-              run_id varchar(128) not null,
-              transfer bytea not null,
-              foreign key(run_id) references run(id))
-        """
-
-  private def insertPartialResult(runId: String, transfer: ContentLinksTransfer) = {
-    val serializedTransfer = ts.serialize(ContentLinksTransferHolder(transfer))
-    sqlu"insert into partial_result (run_id, transfer) values ($runId, $serializedTransfer)"
-  }
-
-  private def deletePartialResults(runId: String) = {
-    sqlu"delete from partial_result where run_id = $runId"
-  }
-
-  private def selectPartialResults(runId: String) = {
-    sql"select transfer from partial_result where run_id = $runId order by id asc".as[Array[Byte]]
-      .map(_.map(bytes => ts.deserialize(bytes).transfer))
-  }
-
-
-  private def createTaskTable: DBIO[Int] =
-    sqlu"""
-           create table if not exists task(
-              id varchar(256) primary key,
-              run_id varchar(128) not null,
-              seeds varchar(1024)[] not null,
-              depth integer not null,
-              partition varchar(256) not null,
-              foreign key(run_id) references run(id))
-        """
-
-  private def insertTask(runId: String, task: Task) = {
-    val seeds = task.seeds.map(_.toString).toSeq
-    sqlu"""insert into task (id, run_id, seeds, depth, partition)
-           values (${task.id}, $runId, $seeds, ${task.initialDepth}, ${task.partition})"""
-  }
-
-  private def selectTask(taskId: String, criteria: LinkSelectionCriteria) = {
-    sql"select id, run_id, seeds, depth, partition where id = $taskId".as[(String, String, Seq[String], Int, String)]
-      .headOption
-      .map(_.map { case (id, runId, seeds, depth, part) => Task(id, seeds.toSet.map(Url.apply), criteria, depth, part) })
-  }
-
-  private def deleteTask(runId: String, taskId: String) = {
-    sqlu"delete from task where id = $taskId and run_id = $runId"
-  }
-
-  private def deleteTasks(runId: String) = {
-    sqlu"delete from task where run_id = $runId"
   }
 
 
@@ -441,7 +273,31 @@ class PgRunControl(
 
   }
 
+  class RunSet {
+
+    private val workIds = mutable.HashSet.empty[String]
+    private val running = mutable.HashMap.empty[String, Run]
+
+    def add(run: Run): Unit = synchronized {
+      running.put(run.id, run)
+      workIds.add(run.workId)
+    }
+
+    def get(runId: String): Option[Run] =
+      running.get(runId)
+
+    def remove(run: Run): Unit = synchronized {
+      running.remove(run.id)
+      workIds.remove(run.workId)
+    }
+
+    def hasWork(workId: String): Boolean =
+      workIds.contains(workId)
+
+  }
+
   trait Depths {
+
     def current: Map[(Int, Int), Int]
 
     def depthStatus(url: Url, partition: String, depth: Int): DepthStatus = {
@@ -452,9 +308,8 @@ class PgRunControl(
       }
     }
 
-    def depthKey(url: Url, partition: String): (Int, Int) = {
+    def depthKey(url: Url, partition: String): (Int, Int) =
       partition.hashCode -> url.hashCode
-    }
 
   }
 
@@ -462,7 +317,8 @@ class PgRunControl(
 
     override val current = depths.toMap
 
-    def project(other: Map[(Url, String), Int]): ProjectedDepths = new ProjectedDepths(depths, other)
+    def project(other: Map[(Url, String), Int]): ProjectedDepths =
+      new ProjectedDepths(depths, other)
 
   }
 
@@ -478,9 +334,8 @@ class PgRunControl(
       current.toMap
     }
 
-    def commit(): Unit = {
+    def commit(): Unit =
       depths ++= current
-    }
 
   }
 
@@ -491,11 +346,8 @@ class PgRunControl(
 
   case object Id {
     val separator = "::"
-
     def idFor(id: String): String = id.split(separator).head
-
     def newRunId = Random.alphanumeric.take(32).mkString
-
     def newTaskId(runId: String) = s"$runId$separator${Random.alphanumeric.take(16).mkString}"
   }
 
