@@ -6,10 +6,10 @@ import akka.persistence._
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.snapshot.SnapshotStore
 import akka.util.Timeout
-import com.github.lucastorri.moca.role.Messages.{Ack, AddWork, Nack, TaskOffer, TaskRequest}
+import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
-import com.github.lucastorri.moca.store.control.{FakeCriteria, RunControl}
+import com.github.lucastorri.moca.store.control.{FakeTransfer, FakeCriteria, RunControl}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{FlatSpec, MustMatchers}
@@ -87,26 +87,36 @@ class MasterTest extends FlatSpec with MustMatchers {
     }
   }
 
-  it must "schedule nack if there are no tasks" in new context {
+  it must "ack when a task is finished" in new context {
     withMaster { master =>
 
-      result(master ? TaskRequest(null)) must be (Nack)
+      result(master ? TaskFinished(null, "1", FakeTransfer())) must be (Ack)
 
     }
   }
 
-  it must "schedule new tasks" in new context {
+  it must "not offer two tasks with the same partition" in new context {
     withMaster { master =>
 
-      val m = Messenger()
+      val task1 = Task("1", Set(Url("http://www.example.com")), FakeCriteria, 0, "a")
+      val task2 = Task("2", Set(Url("http://www.example.com")), FakeCriteria, 0, "a")
+      control.publish(Set(task1))
+      control.publish(Set(task2))
 
-      val task = Task("1", Set(Url("http://www.example.com")), FakeCriteria, 0, "1")
-      control.publish(Set(task))
+      val (m1, reply1) = requestTask(master)
+      reply1 must equal (task1)
 
-      master ! TaskRequest(m.ref)
-      result(m.result[TaskOffer]).task must equal (task)
+      val (m2, reply2) = requestTask(master)
+      reply2 must be (Nack)
 
-      m.close()
+      master ! TaskFinished(m1.ref, "1", FakeTransfer())
+
+      val (m3, reply3) = requestTask(master)
+      reply3 must equal (task2)
+
+      control.taskDone must equal (Seq("1"))
+
+      Seq(m1, m2, m3).foreach(_.close())
 
     }
   }
@@ -114,12 +124,29 @@ class MasterTest extends FlatSpec with MustMatchers {
   trait context {
 
     val control = MemRunControl()
+    val sleep = 50
 
     def withMaster(f: ActorRef => Unit): Unit = {
       val master = system.actorOf(Props(new Master(control)))
-      while (!control.hasSubscriber) Thread.sleep(100)
+      while (!control.hasSubscriber) Thread.sleep(sleep)
       f(master)
       system.stop(master)
+    }
+
+    def requestTask(master: ActorRef, max: Int = 3): (Messenger, Any) = {
+      val m = Messenger()
+      master.tell(TaskRequest(m.ref), m.ref)
+      val returned = result(m.result[Any])
+      returned match {
+        case TaskOffer(task) =>
+          m -> task
+        case _ if max == 0 =>
+          m -> returned
+        case _ =>
+          m.close()
+          Thread.sleep(sleep)
+          requestTask(master, max-1)
+      }
     }
 
   }
@@ -190,6 +217,7 @@ case class MemRunControl() extends RunControl {
 
   val workAdded = mutable.ListBuffer.empty[Set[Work]]
 
+  val taskDone = mutable.ListBuffer.empty[String]
 
   override def add(works: Set[Work]): Future[Unit] = {
     workAdded += works
@@ -200,7 +228,11 @@ case class MemRunControl() extends RunControl {
 
   override def links(workId: String): Future[Option[ContentLinksTransfer]] = ???
 
-  override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = ???
+  override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = {
+    taskDone.append(taskId)
+    Future.successful(None)
+  }
+
 
   override def abort(taskIds: Set[String]): Future[Unit] = ???
 
