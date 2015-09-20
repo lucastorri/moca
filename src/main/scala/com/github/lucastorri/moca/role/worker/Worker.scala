@@ -13,6 +13,7 @@ import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.master.{Master, MasterDown, MasterUp}
 import com.github.lucastorri.moca.role.worker.Worker._
 import com.github.lucastorri.moca.store.content.ContentRepo
+import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.Future
@@ -82,12 +83,8 @@ class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: Par
       }
       stay()
 
-    case Event(Partition(urls), _) =>
-      val taskAdd = Future.sequence {
-        urls.groupBy(_.depth).map { case (depth, links) =>
-          retry(3)(master ? AddSubTask(stateData.id, depth, links.map(_.url)))
-        }
-      }
+    case Event(Partition(urls, depth), _) =>
+      val taskAdd = retry(3)(master ? AddSubTask(stateData.id, depth, urls)).acked()
       taskAdd.onFailure { case t =>
         logger.error("Could not add sub-tasks and will abort task", t)
         self ! Abort
@@ -177,6 +174,6 @@ object Worker {
   case object Done
   case object Abort
   case object Finished
-  case class Partition(urls: Set[Link])
+  case class Partition(urls: Set[Url], depth: Int)
 
 }

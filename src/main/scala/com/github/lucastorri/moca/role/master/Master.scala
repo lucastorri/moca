@@ -207,7 +207,7 @@ class Master(repo: RunControl, bus: EventBus) extends PersistentActor with Stric
           ack(messenger)
         case Failure(t) =>
           logger.error("Could not add sub-task", t)
-          ack(messenger)
+          nack(messenger)
       }
 
     case GetLinks(taskId) =>

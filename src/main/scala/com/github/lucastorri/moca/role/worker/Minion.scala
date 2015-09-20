@@ -112,14 +112,22 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   def addToQueue(found: Found): Unit = {
-    val (toAdd, toFwd) = Link.all(found)
-      .filter(l => !downloaded.contains(l.url.hashCode))
-      .partition(link => partition.same(task, link.url))
+    val inAnotherPartition = found.urls
+      .filter(url => !downloaded.contains(url.hashCode))
+      .flatMap { url =>
+        val link = Link(url, found.depth)
+        if (partition.same(task, url)) {
+          if (!outstanding.contains(link)) outstanding += link
+          None
+        } else {
+          markFetched(link)
+          Some(url)
+        }
+      }
 
-    toFwd.foreach(markFetched)
-    if (toFwd.nonEmpty) parent ! Partition(toFwd) //TODO block on master response, and then continue, otherwise fail
-
-    toAdd.foreach(l => if (!outstanding.contains(l)) outstanding += l)
+    if (inAnotherPartition.nonEmpty) { //TODO block on master response, and then continue, otherwise fail
+      parent ! Partition(inAnotherPartition, found.depth)
+    }
   }
 
   def markFetched(link: Link): Unit = {
