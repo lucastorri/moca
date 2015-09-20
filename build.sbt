@@ -4,10 +4,10 @@ version := "0.0.1"
 
 scalaVersion := "2.11.7"
 
-scalacOptions := Seq("-deprecation", "-unchecked")
+scalacOptions := Seq("-deprecation", "-unchecked", "-feature")
 
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "2.2.5" % "test",
+  "org.scalatest" %% "scalatest" % "2.2.5" % "test,it",
   "org.scala-lang.modules" %% "scala-async" % "0.9.5",
   "com.typesafe.akka" %% "akka-remote" % "2.4-SNAPSHOT",
   "com.typesafe.akka" %% "akka-cluster-sharding" % "2.4-SNAPSHOT",
@@ -43,6 +43,8 @@ assemblyOption in assembly := (assemblyOption in assembly).value
 assemblyJarName in assembly := s"${name.value}-${version.value}"
 
 lazy val root = (project in file("."))
+  .configs(IntegrationTest)
+  .settings(Defaults.itSettings: _*)
   .enablePlugins(BuildInfoPlugin)
   .settings(
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),

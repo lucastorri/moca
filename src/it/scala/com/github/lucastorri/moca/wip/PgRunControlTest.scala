@@ -4,13 +4,14 @@ import akka.actor.ActorSystem
 import com.github.lucastorri.moca.browser.RenderedPage
 import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.partition.ByHostPartitionSelector
-import com.github.lucastorri.moca.role.{Work, Task}
 import com.github.lucastorri.moca.role.worker.Link
+import com.github.lucastorri.moca.role.{Task, Work}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer}
 import com.github.lucastorri.moca.store.serialization.KryoSerializerService
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfterEach, MustMatchers, FlatSpec}
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, MustMatchers}
+
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}

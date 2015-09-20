@@ -104,6 +104,15 @@ rm -rf s3rver && mkdir s3rver && fakes3 -r s3rver/ -p 4568 -H 192.168.2.105
 ```
 
 
+## Integration Tests
+
+Run with
+
+```
+./sbt it:test
+```
+
+
 ## TODO
 
 * Re-enable Javascript execution on the JavaFX WebKit browser:
