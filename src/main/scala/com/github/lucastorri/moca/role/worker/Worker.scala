@@ -22,7 +22,7 @@ class Worker(val master: ActorRef, repo: ContentRepo, browserProvider: BrowserPr
 
   import context._
   implicit val timeout: AskTimeout = 15.seconds
-  private val requestWorkInterval = 5.minute
+  private val requestWorkInterval = 5.minutes
   private val mediator = DistributedPubSub(context.system).mediator
 
   override def preStart(): Unit = {

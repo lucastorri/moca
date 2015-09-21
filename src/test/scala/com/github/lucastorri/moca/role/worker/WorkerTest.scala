@@ -70,7 +70,8 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
       finishedTaskId must equal (taskId)
       finishedBy must be (startedBy)
 
-      finishedTransfer.contents must equal (Seq(ContentLink(url, "", 0, ""), ContentLink(nextUrl, "", 1, "")))
+      finishedTransfer.contents must equal (Seq(
+        ContentLink(url, "", 0, ""), ContentLink(nextUrl, "", 1, "")))
 
       browser.urls.map(_._1) must equal (Seq(url, nextUrl))
       browser.urls.last._2 - browser.urls.head._2 must be >= interval.toMillis
