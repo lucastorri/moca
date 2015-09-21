@@ -3,20 +3,19 @@ package com.github.lucastorri.moca.role.worker
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import akka.actor.Actor.Receive
-import akka.actor.{Actor, Props, ActorRef}
+import akka.actor.{Actor, ActorRef, Props}
 import com.github.lucastorri.moca.browser._
 import com.github.lucastorri.moca.partition.ByHostPartitionSelector
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.{Task, RoleTest}
-import com.github.lucastorri.moca.store.content.{ContentLink, TaskContentRepo, ContentLinksTransfer, ContentRepo}
-import com.github.lucastorri.moca.store.control.{FakeTransfer, FakeCriteria}
+import com.github.lucastorri.moca.role.{RoleTest, Task}
+import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer, ContentRepo, TaskContentRepo}
+import com.github.lucastorri.moca.store.control.{FakeCriteria, FakeTransfer}
 import com.github.lucastorri.moca.url.Url
-import org.scalatest.{MustMatchers, FlatSpec}
-import scala.concurrent.duration._
+import org.scalatest.{FlatSpec, MustMatchers}
 
-import scala.concurrent.{Promise, Future}
 import scala.collection.mutable
+import scala.concurrent.duration._
+import scala.concurrent.{Future, Promise}
 import scala.util.Try
 
 class WorkerTest extends FlatSpec with MustMatchers with RoleTest {

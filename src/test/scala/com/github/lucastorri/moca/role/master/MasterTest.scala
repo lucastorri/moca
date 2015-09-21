@@ -7,7 +7,6 @@ import com.github.lucastorri.moca.role.{RoleTest, Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
 import com.github.lucastorri.moca.store.control.{FakeCriteria, FakeTransfer, RunControl}
 import com.github.lucastorri.moca.url.Url
-import com.typesafe.config.ConfigFactory
 import org.scalatest.{FlatSpec, MustMatchers}
 
 import scala.collection.mutable

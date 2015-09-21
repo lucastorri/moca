@@ -3,9 +3,10 @@ package com.github.lucastorri.moca.role
 import akka.actor.ActorSystem
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Suite, BeforeAndAfterAll}
-import scala.concurrent.{Await, Future}
+import org.scalatest.{BeforeAndAfterAll, Suite}
+
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 
 trait RoleTest extends BeforeAndAfterAll { self: Suite =>
 
