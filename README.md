@@ -1,12 +1,18 @@
 # Moca
 
-`Moca` is a web crawler which is capable of rendering pages that have *Javascript*. Furthermore, it can run distributed in several machines. It is very specialized, in the sense that it will only downloaded the content (no processing is done on top of it) and it can associated a given *id* to given seeds.
+`Moca` is a **web crawler** which is capable of rendering pages with *Javascript*. It is implemented in [Scala](http://scala-lang.org/) and runs on the JVM. By default, pages are rendered using a [WebKit](https://www.webkit.org/) based browser provided by JavaFX. Furthermore, it can be distributed in several machines.
 
-Each seed is associated to a **Work** unit and urls to be followed are select by an implementation of the `LinkSelectionCriteria` class. If two distinct **Work** units end up hitting a same website, this website will be downloaded twice for each of the units. When started to run a given **Work**, urls to be downloaded are broken down in **Tasks**.
-
-`Moca` also guarantees that two conflicting tasks are never executed at a same time. Two tasks are considered to be conflicting if they belong to a same partition. A partition is stablished by an implementation of `PartitionSelector`, which by default is the url's host. So urls that share the same host will belong to a same partition.
+It is very specialized, in the sense that it will only downloaded the content (no processing is done on top of it) and it can associate *ids* to the given seeds.
 
 Politeness can also be configured, making a request to a same partition no more often than, let's say, every 5 seconds.
+
+It is still in a very early state and problems are expected to happen.
+
+## Operation
+
+Each seed is associated to a **Work** unit and URLs to be followed are select by an implementation of the `LinkSelectionCriteria` class. If two distinct **Work** units end up hitting a same website, this website will be downloaded twice for each of the units. When started to run a given **Work**, urls to be downloaded are broken down in **Tasks**.
+
+`Moca` also guarantees that two conflicting tasks are never executed at a same time. Two tasks are considered to be conflicting if they belong to a same partition. A partition is stablished by an implementation of `PartitionSelector`, which by default is the url's host. So urls that share the same host will belong to a same partition.
 
 
 ## Building
