@@ -19,45 +19,25 @@ cd $project
 The generated binary will be available on `$project/target/scala-2.11/moca-0.0.1`.
 
 
-## Adding seeds
-
-```bash
-./target/scala-2.11/moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -s seeds.txt
-```
-
-
-### Seeds file example
-
-```
-!& default
-!= max-depth 3
-!= robots-txt
-!= same-domain
-!= a-href
-
-http://site0.test:8000|1
-```
-
-If an *id* is not given for the seed, the *sha1* hash of the url will be used.
-
-
-### Criteria
-
-
-## Checking results for a specific seed
-
-```bash
-./target/scala-2.11/moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -r 1
-```
-
-This will return the latest results for a given **Work**, or none if hasn't finished yet.
-
-
 ## Running
 
 By default, `Moca` will use *PostgreSQL* for saving state and *AWS S3* for storing downloaded content. The sections below describe how to set up *PostgreSQL* and *FakeS3*, if you wish to run it locally. This behavior is controlled by implementations of `RunControl` and `ContentRepo`, respectively.
 
-A few configuration flags are available when starting it. You can run `moca-0.0.1 --help` for more information.
+A few configuration flags are available when starting it. You can run `moca-0.0.1 --help` for more information. More commonly, if you are running it in several machines, you will want to run something like:
+
+```bash
+moca-0.0.1 -S some-host:1731
+```
+
+`Moca` uses [Akka](http://akka.io/)'s cluster features in order to interact with all running instances. For that, it is necessary to provide host and port for at least another member of the cluster using the `-S` flag, so the starting node can join the others. Besides the flags available, extra configurations can be passed using `-c`. The provided file might look similar to:
+
+```
+store.content.s3.endpoint = "http://$host:$port"
+store.work.postgres.connection.url = "postgres://$user:$pwd@$host/$dbname"
+akka-persistence-sql-async.url = "jdbc:postgresql://$user:$pwd@$host/$dbname"
+```
+
+For more details of what can be passed on the config file you can use `main.conf` as reference.
 
 Content is stored in the format given by a `ContentSerializer`. By default *json* is used to store everything in a format like:
 
@@ -74,7 +54,41 @@ Content is stored in the format given by a `ContentSerializer`. By default *json
 }
 ```
 
-### Set Up PostgreSQL for `PgMapDBWorkRepo`
+### Adding seeds
+
+```bash
+moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -s seeds.txt
+```
+
+### Seeds file example
+
+```
+!& default
+!= max-depth 3
+!= robots-txt
+!= same-domain
+!= a-href
+
+http://site0.test:8000|1
+```
+
+If an *id* is not given for the seed, the *sha1* hash of the url will be used.
+
+#### Criteria
+
+
+### Checking results for a specific seed
+
+```bash
+moca-0.0.1 -p 1732 -S 127.0.0.1:1731 -r 1
+```
+
+This will return the latest results for a given **Work**, or none if hasn't finished yet.
+
+
+## Set Up
+
+### PostgreSQL for `PgMapDBWorkRepo`
 
 Just run the following on your console:
 
@@ -92,7 +106,7 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "public" TO "moca";
 ```
 
 
-### Set Up PostgreSQL for `akka-persistence-sql-async`
+### PostgreSQL for `akka-persistence-sql-async`
 
 Run the following on your console:
 
@@ -140,7 +154,7 @@ host all all 0.0.0.0/0 md5
 ```
 
 
-### Set Up FakeS3 for `S3ContentRepo`
+### FakeS3 for `S3ContentRepo`
 
 1. Install rbenv (used [this](https://gorails.com/setup/osx/10.10-yosemite) as reference)
 2. Set endpoint to `http://localhost:4568` in `main.conf`
