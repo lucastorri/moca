@@ -4,15 +4,21 @@
 
 It is very specialized, in the sense that it will only downloaded the content (no processing is done on top of it) and it can associate *ids* to the given seeds.
 
-Politeness can also be configured, making a request to a same partition no more often than, let's say, every 5 seconds.
+Politeness can also be configured, making a request to a same partition no more often than, let's say, every 5 seconds. `Moca` also guarantees that two conflicting tasks are never executed at a same time. Two tasks are considered to be conflicting if they belong to a same partition. A partition is stablished by an implementation of `PartitionSelector`, which by default is the url's host. So urls that share the same host will belong to a same partition.
 
 It is still in a very early state and problems are expected to happen.
 
-## Operation
 
-Each seed is associated to a **Work** unit and URLs to be followed are select by an implementation of the `LinkSelectionCriteria` class. If two distinct **Work** units end up hitting a same website, this website will be downloaded twice for each of the units. When started to run a given **Work**, urls to be downloaded are broken down in **Tasks**.
+## Glossary
 
-`Moca` also guarantees that two conflicting tasks are never executed at a same time. Two tasks are considered to be conflicting if they belong to a same partition. A partition is stablished by an implementation of `PartitionSelector`, which by default is the url's host. So urls that share the same host will belong to a same partition.
+* **Worker**: an entity of the system that will be responsible for actually downloading content. A single machine/cluster can have multiple instances of **workers** running;
+* **Master**: a singleton entity that is responsible for organizing what the **workers** of a specific machine/cluster will do;
+* **Seed**: a specific URL where crawling will start from;
+* **Partition**: a logical grouping that assembles URLs together. By default their hosts are used. This is used to decide if two given URLs can be fetched in parallel or not, without impacting politeness;
+* **Criteria**: given a fetched page, a **criteria** decides what links on that page should be fetched next;
+* **Work**: the basic input from user, it contains a **seed**, together with an *id*, plus the **criteria** that will be used when crawling it;
+* **Run**: The execution of a given **work**. It is used to organize the **tasks** that will compose it. A **work** can have multiple **runs** for different points in time, but never two **runs** happening at the same time;
+* **Task**: a set of URLs that will be passed to **workers** and then fetched by them. It also contains any other information necessary to accomplish that.
 
 
 ## Building
