@@ -215,7 +215,9 @@ Let's assume we have some *workA* which seed is the URL *siteA/a*. It finds a li
 
 On cases where this happens, the crawler will later on start a new task with the url *siteA/d*, but using the lowest existing depth to begin with. This will cause the whole tree bellow that point to be downloaded, but will nevertheless produce the expected output.
 
-Right now, if *siteA/d* contains an url to *siteA/a*, the whole site might be refetched, that is, till the maximum depth. A possible improvement would be to only download content if the link depth is smaller or equal of previously downloaded content.
+Right now, if *siteA/d* contains an url to *siteA/a*, the whole site might be refetched, that is, till the maximum depth. 
+
+A possible improvement would be to only download content if the link depth is smaller or equal to any previously downloaded version of an specific content. Also, this could become a flag where this behavior is allowed or not.
 
 
 ## TODO
