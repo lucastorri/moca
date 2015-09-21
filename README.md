@@ -184,6 +184,8 @@ And run the integration tests with:
 
 ## Problems
 
+`Moca` is still under development and might present several issues. Here we will document specific behaviors that might bring problems when using it.
+
 ### Refetching Content
 
 When a worker starts a task, we will keep working on it till there are no more eligible links to be downloaded. Eligible links are selected by the `LinkSelectionCriteria`. One of the main ways to control downloading is by using a maximum depth, and when starting from a same URL from different depths, the output might be completely different.
