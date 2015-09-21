@@ -182,6 +182,41 @@ And run the integration tests with:
 ./sbt it:test
 ```
 
+## Problems
+
+### Refetching Content
+
+When a worker starts a task, we will keep working on it till there are no more eligible links to be downloaded. Eligible links are selected by the `LinkSelectionCriteria`. One of the main ways to control downloading is by using a maximum depth, and when starting from a same URL from different depths, the output might be completely different.
+
+Let's assume we have some *workA* which seed is the URL *siteA/a*. It finds a link that takes to another site - url *siteB/a* - where both will at some point converge to the url *siteA/d* but with different depths. You can see a graphical representation of this below:
+
+```
+  depth        workA
+┌───────┐   ┌─────────┐
+│   0   │   │ siteA/a │─ ─ ─ ─ ┐
+├───────┤   └─────────┘        ¦
+│       │        ¦             ¦
+│       │        ▼             ▼
+├───────┤   ┌─────────┐   ┌─────────┐
+│   1   │   │ siteA/b │   │ siteB/a │─ ─ ─ ─ ┐
+├───────┤   └─────────┘   └─────────┘        ¦
+│       │        ¦             ¦             ¦
+│       │        ▼             ▼             ▼
+├───────┤   ┌─────────┐   ┌─────────┐   ╔═════════╗
+│   2   │   │ siteA/c │   │   ...   │   ║ siteA/d ║
+├───────┤   └─────────┘   └─────────┘   ╚═════════╝
+│       │        ¦
+│       │        ▼
+├───────┤   ╔═════════╗
+│   3   │   ║ siteA/d ║
+└───────┘   ╚═════════╝
+
+```
+
+On cases where this happens, the crawler will later on start a new task with the url *siteA/d*, but using the lowest existing depth to begin with. This will cause the whole tree bellow that point to be downloaded, but will nevertheless produce the expected output.
+
+Right now, if *siteA/d* contains an url to *siteA/a*, the whole site might be refetched, that is, till the maximum depth. A possible improvement would be to only download content if the link depth is smaller or equal of previously downloaded content.
+
 
 ## TODO
 
