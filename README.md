@@ -223,7 +223,7 @@ Right now, if *siteA/d* contains an url to *siteA/a*, the whole site might be re
 * Re-enable Javascript execution on JavaFX's WebKit browser:
   	- it was removed due to issues with the JVM. Getting objects from it seem to make the whole process crash
   	- try using a bridge: <https://blogs.oracle.com/javafx/entry/communicating_between_javascript_and_javafx>
-	- Change back BrowserWindow and AHrefCriteria(script) to use respectivelly:
+	- Change back BrowserWindow and AHrefCriteria(script) to use respectively:
 
 ```javascript 
 html = webEngine.executeScript("document.documentElement.outerHTML").toString
