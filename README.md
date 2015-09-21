@@ -29,7 +29,9 @@ A few configuration flags are available when starting it. You can run `moca-0.0.
 moca-0.0.1 -S some-host:1731
 ```
 
-`Moca` uses [Akka](http://akka.io/)'s cluster features in order to interact with all running instances. For that, it is necessary to provide host and port for at least another member of the cluster using the `-S` flag, so the starting node can join the others. Besides the flags available, extra configurations can be passed using `-c`. The provided file might look similar to:
+`Moca` uses [Akka](http://akka.io/)'s cluster features in order to interact with all running instances. For that, it is necessary to provide host and port for at least another member of the cluster using the `-S` flag, so the starting node can join the others. More information can be found [here](http://doc.akka.io/docs/akka/snapshot/java/cluster-usage.html#Joining_to_Seed_Nodes).
+
+Besides the flags available, extra configurations can be passed using `-c`. The provided file might look similar to:
 
 ```
 store.content.s3.endpoint = "http://$host:$port"
@@ -197,3 +199,7 @@ Array.prototype.slice.call(document.getElementsByTagName('a')).map(function(e) {
 * Don't store more than needed for DNS names:
 	- Each label may contain up to 63 characters. The full domain name may not exceed the length of 253 characters in its textual representation
 	- <https://en.wikipedia.org/wiki/Domain_Name_System>
+
+## References
+
+* <https://wiki.apache.org/nutch/OptimizingCrawls>
