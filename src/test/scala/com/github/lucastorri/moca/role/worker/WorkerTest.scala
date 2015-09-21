@@ -10,7 +10,7 @@ import com.github.lucastorri.moca.partition.ByHostPartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.{RoleTest, Task}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer, ContentRepo, TaskContentRepo}
-import com.github.lucastorri.moca.store.control.{EmptyCriteria, FixedTransfer}
+import com.github.lucastorri.moca.store.control.FixedTransfer
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
