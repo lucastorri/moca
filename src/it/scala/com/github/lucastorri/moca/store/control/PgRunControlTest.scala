@@ -43,8 +43,8 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example1.com/"), FakeCriteria),
-        Work("2", Url("http://www.example2.com/"), FakeCriteria))))
+        Work("1", Url("http://www.example1.com/"), EmptyCriteria),
+        Work("2", Url("http://www.example2.com/"), EmptyCriteria))))
 
       published must have size 2
 
@@ -58,12 +58,12 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com"), FakeCriteria),
-        Work("2", Url("http://www.example.com"), FakeCriteria))))
+        Work("1", Url("http://www.example.com"), EmptyCriteria),
+        Work("2", Url("http://www.example.com"), EmptyCriteria))))
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com"), FakeCriteria),
-        Work("2", Url("http://www.example.com"), FakeCriteria))))
+        Work("1", Url("http://www.example.com"), EmptyCriteria),
+        Work("2", Url("http://www.example.com"), EmptyCriteria))))
 
       published must have size 2
 
@@ -74,7 +74,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com/"), FakeCriteria))))
+        Work("1", Url("http://www.example.com/"), EmptyCriteria))))
 
       val task = published.head
 
@@ -90,7 +90,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com/"), FakeCriteria))))
+        Work("1", Url("http://www.example.com/"), EmptyCriteria))))
 
       val task = published.head
 
@@ -104,7 +104,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
   it must "complain when completing a non existing task" in new context {
     withControl { control =>
 
-      val r = control.done("blah", FakeTransfer())
+      val r = control.done("blah", FixedTransfer())
 
       an[Exception] must be thrownBy { result(r) }
 
@@ -115,13 +115,13 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example1.com"), FakeCriteria))))
+        Work("1", Url("http://www.example1.com"), EmptyCriteria))))
 
       val task = published.head
 
       result(control.subTasks(task.id, 1, Set(Url("http://www.example2.com"))))
 
-      result(control.done(task.id, FakeTransfer())) must be (None)
+      result(control.done(task.id, FixedTransfer())) must be (None)
       result(control.links("1")) must be (None)
 
     }
@@ -131,7 +131,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com"), FakeCriteria))))
+        Work("1", Url("http://www.example.com"), EmptyCriteria))))
 
       val task = published.head
 
@@ -139,7 +139,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
       result(control.subTasks(task.id, 1, Set(url)))
       published must have size 1
 
-      result(control.done(task.id, FakeTransfer(ContentLink(url, "", 1, "")))) must be (Some("1"))
+      result(control.done(task.id, FixedTransfer(ContentLink(url, "", 1, "")))) must be (Some("1"))
 
     }
   }
@@ -148,7 +148,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example.com"), FakeCriteria))))
+        Work("1", Url("http://www.example.com"), EmptyCriteria))))
 
       val task = published.head
 
@@ -156,12 +156,12 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
       result(control.subTasks(task.id, 1, Set(url)))
       published must have size 1
 
-      result(control.done(task.id, FakeTransfer(ContentLink(url, "", 2, "")))) must be (None)
+      result(control.done(task.id, FixedTransfer(ContentLink(url, "", 2, "")))) must be (None)
 
       published must have size 2
       published.last.seeds must equal (Set(url))
 
-      result(control.done(published.last.id, FakeTransfer())) must be (Some("1"))
+      result(control.done(published.last.id, FixedTransfer())) must be (Some("1"))
 
     }
   }
@@ -170,8 +170,8 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("1", Url("http://www.example1.com"), FakeCriteria),
-        Work("2", Url("http://www.example2.com"), FakeCriteria))))
+        Work("1", Url("http://www.example1.com"), EmptyCriteria),
+        Work("2", Url("http://www.example2.com"), EmptyCriteria))))
 
       val task1 = published.head
       val task2 = published.last
@@ -182,7 +182,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
 
       published.foreach { t =>
         val links = t.seeds.map(url => ContentLink(url, "", t.initialDepth, "")).toSeq
-        result(control.done(t.id, FakeTransfer(links: _*)))
+        result(control.done(t.id, FixedTransfer(links: _*)))
       }
 
       result(control.links("1")).get.contents.toSet must equal (Set(
@@ -201,7 +201,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.add(Set(
-        Work("7", Url("http://www.example.com/"), FakeCriteria))))
+        Work("7", Url("http://www.example.com/"), EmptyCriteria))))
 
       val task = published.head
 
@@ -210,7 +210,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
       published must have size 2
       published.head must equal (published.last)
 
-      result(control.done(task.id, FakeTransfer())) must equal (Some("7"))
+      result(control.done(task.id, FixedTransfer())) must equal (Some("7"))
 
     }
   }
@@ -218,7 +218,7 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
   it must "continue after restart" in new context {
     withControl { control =>
 
-      result(control.add(Set(Work("3", Url("http://www.example1.com/"), FakeCriteria))))
+      result(control.add(Set(Work("3", Url("http://www.example1.com/"), EmptyCriteria))))
       
       result(control.subTasks(published.head.id, 1, Set(Url("http://www.example2.com/"))))
 
@@ -228,13 +228,13 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
     withControl { control =>
 
       result(control.done(published.head.id,
-        FakeTransfer(ContentLink(Url("http://www.example1.com/other-url"), "", 3, ""))))
+        FixedTransfer(ContentLink(Url("http://www.example1.com/other-url"), "", 3, ""))))
 
       val last = published.last
       (last.seeds -> last.initialDepth) must equal (Set(Url("http://www.example1.com/other-url")) -> 2)
 
       val done = published.tail.map { t =>
-        result(control.done(t.id, FakeTransfer()))
+        result(control.done(t.id, FixedTransfer()))
       }
 
       done must equal (Seq(None, Some("3")))
@@ -259,10 +259,10 @@ class PgRunControlTest extends FlatSpec with MustMatchers with BeforeAndAfterEac
 
 }
 
-case class FakeTransfer(items: ContentLink*) extends ContentLinksTransfer {
+case class FixedTransfer(items: ContentLink*) extends ContentLinksTransfer {
   override def contents: Stream[ContentLink] = items.toStream
 }
 
-case object FakeCriteria extends LinkSelectionCriteria {
+case object EmptyCriteria extends LinkSelectionCriteria {
   override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = Set.empty
 }

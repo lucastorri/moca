@@ -5,15 +5,17 @@ import java.nio.charset.StandardCharsets
 
 import akka.actor.{Actor, ActorRef, Props}
 import com.github.lucastorri.moca.browser._
+import com.github.lucastorri.moca.criteria.LinkSelectionCriteria
 import com.github.lucastorri.moca.partition.ByHostPartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.{RoleTest, Task}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer, ContentRepo, TaskContentRepo}
-import com.github.lucastorri.moca.store.control.{FakeCriteria, FakeTransfer}
+import com.github.lucastorri.moca.store.control.{EmptyCriteria, FixedTransfer}
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
 import scala.collection.mutable
+import scala.compat.Platform
 import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 import scala.util.Try
@@ -39,14 +41,16 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     val onFirstRequest = Promise[ActorRef]()
     val onTaskFinished = Promise[(ActorRef, String, ContentLinksTransfer)]()
     val url = Url("http://www.example.com")
+    val nextUrl = url.resolve("next")
     val taskId = "1"
+    val interval = 300.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
         onFirstRequest.success(who)
-        who ! TaskOffer(new Task(taskId, Set(url), FakeCriteria, 0, partition(url)) {
-          override def intervalBetweenRequests: FiniteDuration = 50.millis
+        who ! TaskOffer(new Task(taskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
+          override def intervalBetweenRequests: FiniteDuration = interval
         })
         None
       case TaskRequest(who) =>
@@ -65,9 +69,11 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
       finishedTaskId must equal (taskId)
       finishedBy must be (startedBy)
-      finishedTransfer.contents must equal (Seq(ContentLink(url, "", 0, "")))
 
-      browser.urls must equal (Seq(url))
+      finishedTransfer.contents must equal (Seq(ContentLink(url, "", 0, ""), ContentLink(nextUrl, "", 1, "")))
+
+      browser.urls.map(_._1) must equal (Seq(url, nextUrl))
+      browser.urls.last._2 - browser.urls.head._2 must be >= interval.toMillis
 
     }
     
@@ -102,6 +108,13 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
 }
 
+class PlusOneCriteria(base: Url, next: Url) extends LinkSelectionCriteria {
+  override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = {
+    if (link.url == base) Set(next)
+    else Set.empty
+  }
+}
+
 class FakeContentRepo extends ContentRepo {
 
   val saved = mutable.ListBuffer.empty[(Url, Int)]
@@ -115,18 +128,18 @@ class FakeContentRepo extends ContentRepo {
 
   override def links(task: Task): ContentLinksTransfer = {
     val links = saved.map { case (url, depth) => ContentLink(url, "", depth, "") }
-    FakeTransfer(links: _*)
+    FixedTransfer(links: _*)
   }
 
 }
 
 class FakeBrowserProvider extends BrowserProvider {
   
-  val urls = mutable.ListBuffer.empty[Url]
+  val urls = mutable.ListBuffer.empty[(Url, Long)]
   
   override def instance(): Browser = new Browser {
     override def goTo[T](url: Url)(f: (RenderedPage) => T): Future[T] = {
-      urls += url
+      urls += (url -> Platform.currentTime)
       val r = f(new RenderedPage {
 
         override def originalUrl: Url = url

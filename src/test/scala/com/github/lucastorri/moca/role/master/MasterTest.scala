@@ -5,7 +5,7 @@ import akka.pattern.ask
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.{RoleTest, Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
-import com.github.lucastorri.moca.store.control.{FakeCriteria, FakeTransfer, RunControl}
+import com.github.lucastorri.moca.store.control.{EmptyCriteria, FixedTransfer, RunControl}
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
@@ -45,7 +45,7 @@ class MasterTest extends FlatSpec with MustMatchers with RoleTest {
   it must "add new work" in new context {
     withMaster { master =>
 
-      val newWork = Set(Work("1", Url("http://www.example.com"), FakeCriteria))
+      val newWork = Set(Work("1", Url("http://www.example.com"), EmptyCriteria))
 
       master ! AddWork(newWork)
       master ! PoisonPill
@@ -60,7 +60,7 @@ class MasterTest extends FlatSpec with MustMatchers with RoleTest {
   it must "ack when a task is finished" in new context {
     withMaster { master =>
 
-      result(master ? TaskFinished(null, "1", FakeTransfer())) must be (Ack)
+      result(master ? TaskFinished(null, "1", FixedTransfer())) must be (Ack)
 
     }
   }
@@ -68,8 +68,8 @@ class MasterTest extends FlatSpec with MustMatchers with RoleTest {
   it must "not offer two tasks with the same partition" in new context {
     withMaster { master =>
 
-      val task1 = Task("1", Set(Url("http://www.example.com")), FakeCriteria, 0, "a")
-      val task2 = Task("2", Set(Url("http://www.example.com")), FakeCriteria, 0, "a")
+      val task1 = Task("1", Set(Url("http://www.example.com")), EmptyCriteria, 0, "a")
+      val task2 = Task("2", Set(Url("http://www.example.com")), EmptyCriteria, 0, "a")
       control.publish(Set(task1))
       control.publish(Set(task2))
 
@@ -79,7 +79,7 @@ class MasterTest extends FlatSpec with MustMatchers with RoleTest {
       val (m2, reply2) = requestTask(master)
       reply2 must be (Nack)
 
-      master ! TaskFinished(m1.ref, "1", FakeTransfer())
+      master ! TaskFinished(m1.ref, "1", FixedTransfer())
 
       val (m3, reply3) = requestTask(master)
       reply3 must equal (task2)

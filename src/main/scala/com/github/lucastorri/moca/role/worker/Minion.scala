@@ -1,7 +1,7 @@
 package com.github.lucastorri.moca.role.worker
 
 import akka.pattern.ask
-import akka.persistence.{PersistentActor, RecoveryCompleted}
+import akka.persistence.{DeleteMessagesSuccess, PersistentActor, RecoveryCompleted}
 import akka.util.Timeout
 import com.github.lucastorri.moca.browser.{Browser, Content}
 import com.github.lucastorri.moca.partition.PartitionSelector
@@ -148,6 +148,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   override def unhandled(message: Any): Unit = message match {
+    case d: DeleteMessagesSuccess =>
     case _ => logger.error(s"Unknown message $message")
   }
 
