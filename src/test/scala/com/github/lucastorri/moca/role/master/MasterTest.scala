@@ -2,72 +2,43 @@ package com.github.lucastorri.moca.role.master
 
 import akka.actor._
 import akka.pattern.ask
-import akka.persistence._
-import akka.persistence.journal.AsyncWriteJournal
-import akka.persistence.snapshot.SnapshotStore
-import akka.util.Timeout
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.{Task, Work}
+import com.github.lucastorri.moca.role.{RoleTest, Task, Work}
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
-import com.github.lucastorri.moca.store.control.{FakeTransfer, FakeCriteria, RunControl}
+import com.github.lucastorri.moca.store.control.{FakeCriteria, FakeTransfer, RunControl}
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{FlatSpec, MustMatchers}
 
-import scala.collection.{immutable, mutable}
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future, Promise}
+import scala.collection.mutable
+import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
-import scala.util.{Success, Try}
 
-class MasterTest extends FlatSpec with MustMatchers {
+class MasterTest extends FlatSpec with MustMatchers with RoleTest {
 
-  val port = 9898
-  val name = "MasterTest"
+  override val port = 9898
+  override val name = "MasterTest"
+  override val config = """
+     |moca.master.journal-plugin-id = "journal"
+     |moca.master.snapshot-plugin-id = "snapshot"
+     |
+     |journal {
+     |  class = "com.github.lucastorri.moca.role.EmptyJournal"
+     |  plugin-dispatcher = "akka.actor.default-dispatcher"
+     |}
+     |
+     |snapshot {
+     |  class = "com.github.lucastorri.moca.role.EmptySnapshotStore"
+     |  plugin-dispatcher = "akka.actor.default-dispatcher"
+     |}
+   """.stripMargin
 
-  implicit val timeout: Timeout = 5.seconds
-  implicit val system = ActorSystem(name, ConfigFactory.parseString(
-    s"""
-      |akka {
-      |
-      |  actor {
-      |    provider = "akka.cluster.ClusterActorRefProvider"
-      |  }
-      |
-      |  cluster {
-      |    roles = ["master"]
-      |    seed-nodes = ["akka.tcp://$name@127.0.0.1:$port"]
-      |    auto-down-unreachable-after = 10s
-      |  }
-      |
-      |  remote {
-      |    netty.tcp {
-      |      port = $port
-      |      hostname = "127.0.0.1"
-      |    }
-      |  }
-      |
-      |}
-      |
-      |moca.master.journal-plugin-id = "journal"
-      |moca.master.snapshot-plugin-id = "snapshot"
-      |
-      |journal {
-      |  class = "com.github.lucastorri.moca.role.master.EmptyJournal"
-      |  plugin-dispatcher = "akka.actor.default-dispatcher"
-      |}
-      |
-      |snapshot {
-      |  class = "com.github.lucastorri.moca.role.master.EmptySnapshotStore"
-      |  plugin-dispatcher = "akka.actor.default-dispatcher"
-      |}
-    """.stripMargin))
 
   it must "close control before dying" in new context {
     withMaster { master =>
 
       master ! PoisonPill
-      result(control.closed) must be (true)
+      result(control.closed) must be (right = true)
 
     }
   }
@@ -121,6 +92,11 @@ class MasterTest extends FlatSpec with MustMatchers {
     }
   }
 
+
+  override protected def afterAll(): Unit = {
+    system.terminate()
+  }
+
   trait context {
 
     val control = MemRunControl()
@@ -151,12 +127,7 @@ class MasterTest extends FlatSpec with MustMatchers {
 
   }
 
-  def result[R](f: Future[R]): R =
-    Await.result(f, timeout.duration)
-
 }
-
-
 
 case class Messenger(ack: Boolean = true)(implicit system: ActorSystem) {
 
@@ -177,38 +148,6 @@ case class Messenger(ack: Boolean = true)(implicit system: ActorSystem) {
 
 }
 
-class EmptySnapshotStore extends SnapshotStore {
-
-  override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] =
-    Future.successful(None)
-
-  override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] =
-    Future.successful(())
-
-  override def deleteAsync(metadata: SnapshotMetadata): Future[Unit] =
-    Future.successful(())
-
-  override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] =
-    Future.successful(())
-
-}
-
-class EmptyJournal extends AsyncWriteJournal {
-
-  override def asyncWriteMessages(messages: immutable.Seq[AtomicWrite]): Future[immutable.Seq[Try[Unit]]] =
-    Future.successful(messages.map(_ => Success(())))
-
-  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] =
-    Future.successful(())
-
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
-    Future.successful(0L)
-
-  override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(recoveryCallback: (PersistentRepr) => Unit): Future[Unit] =
-    Future.successful(())
-
-}
-
 case class MemRunControl() extends RunControl {
 
   private val _closed = Promise[Boolean]()
@@ -224,9 +163,9 @@ case class MemRunControl() extends RunControl {
     Future.successful(())
   }
 
-  override def subTasks(parentTaskId: String, depth: Int, urls: Set[Url]): Future[Unit] = ???
+  override def subTasks(parentTaskId: String, depth: Int, urls: Set[Url]): Future[Unit] = sys.error("Not implemented")
 
-  override def links(workId: String): Future[Option[ContentLinksTransfer]] = ???
+  override def links(workId: String): Future[Option[ContentLinksTransfer]] = sys.error("Not implemented")
 
   override def done(taskId: String, transfer: ContentLinksTransfer): Future[Option[String]] = {
     taskDone.append(taskId)
@@ -234,7 +173,7 @@ case class MemRunControl() extends RunControl {
   }
 
 
-  override def abort(taskIds: Set[String]): Future[Unit] = ???
+  override def abort(taskIds: Set[String]): Future[Unit] = sys.error("Not implemented")
 
   override def close(): Unit =
     _closed.success(true)

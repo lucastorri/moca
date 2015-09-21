@@ -18,14 +18,12 @@ import com.typesafe.scalalogging.StrictLogging
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-class Worker(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
+class Worker(val master: ActorRef, repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, holdOnMasterUp: Boolean) extends Actor with FSM[State, Task] with StrictLogging {
 
   import context._
   implicit val timeout: AskTimeout = 15.seconds
   private val requestWorkInterval = 5.minute
-
   private val mediator = DistributedPubSub(context.system).mediator
-  private val master = Master.proxy()
 
   override def preStart(): Unit = {
     logger.info("Worker started")
@@ -168,7 +166,7 @@ object Worker {
   val role = "worker"
 
   def start(repo: ContentRepo, browserProvider: BrowserProvider, partition: PartitionSelector, holdOnMasterUp: Boolean)(id: Int)(implicit system: ActorSystem): Unit = {
-    system.actorOf(Props(new Worker(repo, browserProvider, partition, holdOnMasterUp)), s"worker-$id")
+    system.actorOf(Props(new Worker(Master.proxy(), repo, browserProvider, partition, holdOnMasterUp)), s"worker-$id")
   }
 
   sealed trait State
