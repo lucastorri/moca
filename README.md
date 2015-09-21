@@ -84,6 +84,36 @@ If an *id* is not given for the seed, the *sha1* hash of the url will be used.
 
 #### Criteria
 
+An instance of `LinkSelectionCriteria` determines how a website will be crawled. You can implement it yourself or use some of the existing ones. A [DSL](https://en.wikipedia.org/wiki/Domain-specific_language) is used on the seeds input file to register what is the criteria to be used together with each of the seeds.
+
+Some of the the available implementations are:
+
+* `AHrefCriteria`: selects and resolves all links from the page that appear on *href* attributes of *a* elements;
+* `MaxDepthCriteria`: filter out any link that exceeds the defined max depth;
+* `RobotsTxtCriteria`: filter out links that are excluded by the website's [robots.txt](http://www.robotstxt.org/);
+* `SameDomainCriteria`: filter out links that don't belong to the crawled domain. It uses both the original URL and the rendered URL (if there were any redirects) when deciding;
+* `SameHostCriteria`: filter out links that don't belong to the same host, also using the original and rendered URLs for reference;
+* `StringJSCriteria`: receives a Javascript script that is expected to return an array of urls, that are then resolved and returned;
+
+When declaring them on the input file, the following format is expected:
+
+```
+!& criteria-name
+!= n optional filters
+!= criteria able to generate links
+```
+
+If a criteria has the name `default`, than it will be automatically assigned to any seed that doesn't have another name declared. A specific criteria might be assigned to a seed by adding its name after the *id*, for example:
+
+```
+& custom-criteria
+!= a-href
+
+http://www.example.com|1|custom-criteria
+```
+
+If no `default` is defined, a system default will be used, that is a combination of `AHrefCriteria` with `MaxDepthCriteria(2)`.
+
 
 ### Checking results for a specific seed
 
