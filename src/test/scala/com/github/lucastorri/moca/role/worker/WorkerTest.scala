@@ -23,7 +23,6 @@ import scala.util.Try
 class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
   override val port = 9897
-  override val name = "WorkerTest"
   override val config = """
       |moca.minion.journal-plugin-id = "journal"
       |

@@ -11,9 +11,9 @@ import scala.concurrent.{Await, Future}
 trait RoleTest extends BeforeAndAfterAll { self: Suite =>
 
   def port: Int
-  def name: String
   def config: String
 
+  final val name = this.getClass.getSimpleName
   implicit val timeout: Timeout = 5.seconds
   implicit lazy val system = {
     val baseConfig = ConfigFactory.parseString(

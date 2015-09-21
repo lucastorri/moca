@@ -16,7 +16,6 @@ import scala.reflect.ClassTag
 class MasterTest extends FlatSpec with MustMatchers with RoleTest {
 
   override val port = 9898
-  override val name = "MasterTest"
   override val config = """
      |moca.master.journal-plugin-id = "journal"
      |moca.master.snapshot-plugin-id = "snapshot"
