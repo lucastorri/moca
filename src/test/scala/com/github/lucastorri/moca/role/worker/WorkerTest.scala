@@ -42,15 +42,12 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     val url = Url("http://www.example.com")
     val nextUrl = url.resolve("next")
     val TaskId = "1"
-    val interval = 300.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
         onFirstRequest.success(who)
-        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
-          override def intervalBetweenRequests: FiniteDuration = interval
-        })
+        who ! TaskOffer(task(TaskId, url, PlusOneCriteria(url, nextUrl)))
         None
       case TaskRequest(who) =>
         Some(Nack)
@@ -72,7 +69,7 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
         ContentLink(url, "", 0, ""), ContentLink(nextUrl, "", 1, "")))
 
       browser.urls.map(_._1) must equal (Seq(url, nextUrl))
-      browser.urls.last._2 - browser.urls.head._2 must be >= interval.toMillis
+      browser.urls.last._2 - browser.urls.head._2 must be >= requestsInterval.toMillis
 
     }
     
@@ -87,14 +84,11 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
     val url = Url("http://www.example.com")
     val TaskId = "1"
-    val interval = 10.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
-        who ! TaskOffer(new Task(TaskId, Set(url), EmptyCriteria, 0, partition(url)) {
-          override def intervalBetweenRequests: FiniteDuration = interval
-        })
+        who ! TaskOffer(task(TaskId, url, EmptyCriteria))
         None
       case TaskRequest(who) =>
         time(onNextRequest)
@@ -124,14 +118,11 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     val url = Url("http://www.example1.com")
     val nextUrl = Url("http://www.example2.com")
     val TaskId = "1"
-    val interval = 300.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
-        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
-          override def intervalBetweenRequests: FiniteDuration = interval
-        })
+        who ! TaskOffer(task(TaskId, url, PlusOneCriteria(url, nextUrl)))
         None
       case TaskRequest(who) =>
         Some(Nack)
@@ -162,14 +153,11 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     val url = Url("http://www.example1.com")
     val nextUrl = Url("http://www.example2.com")
     val TaskId = "1"
-    val interval = 300.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
-        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
-          override def intervalBetweenRequests: FiniteDuration = interval
-        })
+        who ! TaskOffer(task(TaskId, url, PlusOneCriteria(url, nextUrl)))
         None
       case TaskRequest(who) =>
         time(onNextRequest)
@@ -199,6 +187,7 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     val repo = new FakeContentRepo
     val browser = new FakeBrowserProvider()
     val partition = new ByHostPartitionSelector
+    val requestsInterval = 150.millis
     def master = _master
 
     def master(handler: PartialFunction[Any, Option[Any]]): Unit = {
@@ -222,11 +211,17 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
       Thread.sleep(1)
     }
 
+    def task(id: String, seed: Url, criteria: LinkSelectionCriteria): Task = {
+      new Task(id, Set(seed), criteria, 0, partition(seed)) {
+        override def intervalBetweenRequests: FiniteDuration = requestsInterval
+      }
+    }
+
   }
 
 }
 
-class PlusOneCriteria(base: Url, next: Url) extends LinkSelectionCriteria {
+case class PlusOneCriteria(base: Url, next: Url) extends LinkSelectionCriteria {
   override def select(task: Task, link: Link, page: RenderedPage): Set[Url] = {
     if (link.url == base) Set(next)
     else Set.empty
