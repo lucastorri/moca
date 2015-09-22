@@ -1,14 +1,14 @@
 package com.github.lucastorri.moca.collection
 
-import com.github.lucastorri.moca.collection.InsertionOrderedSet.Entry
+import com.github.lucastorri.moca.collection.InsertionOrderedSet.{DefaultPointer, Entry, Pointer}
 
 class InsertionOrderedSet[T]()
   extends scala.collection.mutable.Set[T]
   with scala.collection.mutable.SetLike[T, InsertionOrderedSet[T]] {
 
   private val _set = emptyInnerMap()
-  private var _head = 0
-  private var _last = 0
+  private val _head = emptyPointer()
+  private val _last = emptyPointer()
 
   override def contains(item: T): Boolean = _set.containsKey(item.hashCode)
 
@@ -23,20 +23,21 @@ class InsertionOrderedSet[T]()
     val k = item.hashCode
 
     if (isEmpty) {
-      _head = k
-      _last = k
+      _head.v = k
+      _last.v = k
       _set.put(k, Entry(item, k, k))
     } else if (_head == _last) {
-      _set.put(k, Entry(item, _last, _last))
-      _set.put(_last, _set.get(_last).copy(previous = k, next = k))
-      _last = k
+      _set.put(k, Entry(item, _last.v, _last.v))
+      _set.put(_last.v, _set.get(_last.v).copy(previous = k, next = k))
+      _last.v = k
     } else {
-      _set.put(k, Entry(item, _last, _head))
-      _set.put(_head, _set.get(_head).copy(previous = k))
-      _set.put(_last, _set.get(_last).copy(next = k))
-      _last = k
+      _set.put(k, Entry(item, _last.v, _head.v))
+      _set.put(_head.v, _set.get(_head.v).copy(previous = k))
+      _set.put(_last.v, _set.get(_last.v).copy(next = k))
+      _last.v = k
     }
 
+    onUpdate()
     !removed
   }
 
@@ -49,12 +50,13 @@ class InsertionOrderedSet[T]()
         _set.put(old.next, _set.get(old.next).copy(previous = old.previous))
       }
 
-      if (k == _head) {
-        _head = old.next
-      } else if (k == _last) {
-        _last = old.previous
+      if (k == _head.v) {
+        _head.v = old.next
+      } else if (k == _last.v) {
+        _last.v = old.previous
       }
 
+      onUpdate()
       true
     }
   }
@@ -71,8 +73,8 @@ class InsertionOrderedSet[T]()
 
   override def iterator: Iterator[T] = new Iterator[T] {
 
-    private val first = _head
-    private var _next: Int = _head
+    private val first = _head.v
+    private var _next: Int = _head.v
     private var _hasNext = InsertionOrderedSet.this.nonEmpty
 
     override def hasNext: Boolean = _hasNext
@@ -87,7 +89,11 @@ class InsertionOrderedSet[T]()
 
   }
 
-  def emptyInnerMap(): java.util.Map[Int, Entry[T]] = new java.util.HashMap[Int, Entry[T]]()
+  protected def emptyInnerMap(): java.util.Map[Int, Entry[T]] = new java.util.HashMap[Int, Entry[T]]()
+
+  protected def emptyPointer(): Pointer = new DefaultPointer
+
+  protected def onUpdate(): Unit = {}
 
   override def toString(): String = iterator.mkString("{", ", ", "}")
 
@@ -96,6 +102,15 @@ class InsertionOrderedSet[T]()
 object InsertionOrderedSet {
 
   def empty[T]: InsertionOrderedSet[T] = new InsertionOrderedSet[T]()
+
+  trait Pointer {
+    def v: Int
+    def v_=(i: Int): Unit
+  }
+
+  class DefaultPointer extends Pointer {
+    var v = 0
+  }
 
   case class Entry[T](item: T, previous: Int, next: Int)
 
