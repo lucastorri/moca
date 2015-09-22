@@ -251,7 +251,7 @@ class PgRunControl(
       .fileMmapEnableIfSupported()
       .cacheLRUEnable()
       .make()
-    private val knownDepths = fdb.hashMap("known-depths")[Long, Int]
+    private val knownDepths = fdb.hashMap[Long, Int]("known-depths")
 
     def depths = new CurrentDepths(knownDepths, fdb)
 
