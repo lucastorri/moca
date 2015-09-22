@@ -38,35 +38,34 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     var first = true
 
     val onFirstRequest = Promise[ActorRef]()
-    val onTaskFinished = Promise[(ActorRef, String, ContentLinksTransfer)]()
+    val onTaskFinished = Promise[(ActorRef, ContentLinksTransfer)]()
     val url = Url("http://www.example.com")
     val nextUrl = url.resolve("next")
-    val taskId = "1"
+    val TaskId = "1"
     val interval = 300.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
         onFirstRequest.success(who)
-        who ! TaskOffer(new Task(taskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
+        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
           override def intervalBetweenRequests: FiniteDuration = interval
         })
         None
       case TaskRequest(who) =>
         Some(Nack)
-      case TaskFinished(who, finishedTaskId, transfer) =>
-        onTaskFinished.success((who, finishedTaskId, transfer))
+      case TaskFinished(who, TaskId, transfer) =>
+        onTaskFinished.success((who, transfer))
         Some(Ack)
     }
     
     withWorker { worker =>
 
-      val startedBy = result(onFirstRequest.future)
+      val startedBy = result(onFirstRequest)
       startedBy must be (worker)
 
-      val (finishedBy, finishedTaskId, finishedTransfer) = result(onTaskFinished.future)
+      val (finishedBy, finishedTransfer) = result(onTaskFinished)
 
-      finishedTaskId must equal (taskId)
       finishedBy must be (startedBy)
 
       finishedTransfer.contents must equal (Seq(
@@ -83,38 +82,111 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
     var first = true
 
-    val onAbort = Promise[(ActorRef, String, Long)]()
+    val onAbort = Promise[Long]()
     val onNextRequest = Promise[Long]()
+
     val url = Url("http://www.example.com")
-    val taskId = "1"
+    val TaskId = "1"
     val interval = 10.millis
 
     master {
       case TaskRequest(who) if first =>
         first = false
-        who ! TaskOffer(new Task(taskId, Set(url), EmptyCriteria, 0, partition(url)) {
+        who ! TaskOffer(new Task(TaskId, Set(url), EmptyCriteria, 0, partition(url)) {
           override def intervalBetweenRequests: FiniteDuration = interval
         })
         None
       case TaskRequest(who) =>
-        Thread.sleep(1)
-        onNextRequest.success(Platform.currentTime)
+        time(onNextRequest)
         Some(Nack)
-      case TaskFinished(who, finishedTaskId, transfer) =>
+      case TaskFinished(who, TaskId, transfer) =>
         Some(Nack)
-      case AbortTask(who, abortedTaskId) =>
-        onAbort.success((who, abortedTaskId, Platform.currentTime))
+      case AbortTask(who, TaskId) =>
+        time(onAbort)
         Some(Ack)
     }
 
     withWorker { worker =>
 
-      val (who, abortedTaskId, abortTimestamp) = result(onAbort.future)
-      who must be (worker)
-      abortedTaskId must equal (taskId)
+      result(onNextRequest) must be > result(onAbort)
 
-      result(onNextRequest.future) must be > abortTimestamp
+    }
 
+  }
+
+  it must "inform partitions" in new context {
+
+    var first = true
+
+    val onAddSubTask = Promise[Long]()
+    val onFinished = Promise[Long]()
+
+    val url = Url("http://www.example1.com")
+    val nextUrl = Url("http://www.example2.com")
+    val TaskId = "1"
+    val interval = 300.millis
+
+    master {
+      case TaskRequest(who) if first =>
+        first = false
+        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
+          override def intervalBetweenRequests: FiniteDuration = interval
+        })
+        None
+      case TaskRequest(who) =>
+        Some(Nack)
+      case AddSubTask(TaskId, 1, urls) if urls == Set(nextUrl) =>
+        time(onAddSubTask)
+        Some(Ack)
+      case TaskFinished(who, TaskId, _) =>
+        time(onFinished)
+        Some(Ack)
+    }
+
+    withWorker { worker =>
+
+      result(onFinished) must be > result(onAddSubTask)
+
+    }
+
+  }
+
+  it must "abort task if cannot inform of partitions" in new context {
+
+    var first = true
+
+    val onAbort = Promise[Long]()
+    val onAddSubTask = Promise[Long]()
+    val onNextRequest = Promise[Long]()
+
+    val url = Url("http://www.example1.com")
+    val nextUrl = Url("http://www.example2.com")
+    val TaskId = "1"
+    val interval = 300.millis
+
+    master {
+      case TaskRequest(who) if first =>
+        first = false
+        who ! TaskOffer(new Task(TaskId, Set(url), new PlusOneCriteria(url, nextUrl), 0, partition(url)) {
+          override def intervalBetweenRequests: FiniteDuration = interval
+        })
+        None
+      case TaskRequest(who) =>
+        time(onNextRequest)
+        Some(Nack)
+      case AddSubTask(TaskId, 1, urls) if urls == Set(nextUrl) =>
+        time(onAddSubTask)
+        Some(Nack)
+      case AbortTask(who, TaskId) =>
+        time(onAbort)
+        Some(Ack)
+    }
+    
+    withWorker { worker =>
+
+      result(onNextRequest) must be > result(onAbort)
+      result(onAbort) must be > result(onAddSubTask)
+      
     }
 
   }
@@ -143,6 +215,11 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
       f(worker)
       system.stop(worker)
       system.stop(_master)
+    }
+
+    def time(promise: Promise[Long]): Unit = {
+      promise.success(Platform.currentTime)
+      Thread.sleep(1)
     }
 
   }

@@ -6,7 +6,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
 import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Promise, Await, Future}
 
 trait RoleTest extends BeforeAndAfterAll { self: Suite =>
 
@@ -45,6 +45,9 @@ trait RoleTest extends BeforeAndAfterAll { self: Suite =>
   override protected def afterAll(): Unit = {
     system.terminate()
   }
+
+  def result[R](p: Promise[R]): R =
+    result(p.future)
 
   def result[R](f: Future[R]): R =
     Await.result(f, timeout.duration)
