@@ -10,7 +10,7 @@ import com.github.lucastorri.moca.partition.ByHostPartitionSelector
 import com.github.lucastorri.moca.role.Messages._
 import com.github.lucastorri.moca.role.{RoleTest, Task}
 import com.github.lucastorri.moca.store.content.{ContentLink, ContentLinksTransfer, ContentRepo, TaskContentRepo}
-import com.github.lucastorri.moca.store.control.FixedTransfer
+import com.github.lucastorri.moca.store.control.{EmptyCriteria, FixedTransfer}
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
@@ -79,17 +79,58 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     
   }
 
+  it must "abort if master doesn't ack end of task" in new context {
+
+    var first = true
+
+    val onAbort = Promise[(ActorRef, String, Long)]()
+    val onNextRequest = Promise[Long]()
+    val url = Url("http://www.example.com")
+    val taskId = "1"
+    val interval = 10.millis
+
+    master {
+      case TaskRequest(who) if first =>
+        first = false
+        who ! TaskOffer(new Task(taskId, Set(url), EmptyCriteria, 0, partition(url)) {
+          override def intervalBetweenRequests: FiniteDuration = interval
+        })
+        None
+      case TaskRequest(who) =>
+        Thread.sleep(1)
+        onNextRequest.success(Platform.currentTime)
+        Some(Nack)
+      case TaskFinished(who, finishedTaskId, transfer) =>
+        Some(Nack)
+      case AbortTask(who, abortedTaskId) =>
+        onAbort.success((who, abortedTaskId, Platform.currentTime))
+        Some(Ack)
+    }
+
+    withWorker { worker =>
+
+      val (who, abortedTaskId, abortTimestamp) = result(onAbort.future)
+      who must be (worker)
+      abortedTaskId must equal (taskId)
+
+      result(onNextRequest.future) must be > abortTimestamp
+
+    }
+
+  }
+
 
   trait context {
 
-    private var master: ActorRef = _
+    private var _master: ActorRef = _
 
     val repo = new FakeContentRepo
     val browser = new FakeBrowserProvider()
     val partition = new ByHostPartitionSelector
+    def master = _master
 
     def master(handler: PartialFunction[Any, Option[Any]]): Unit = {
-      master = system.actorOf(Props(new Actor {
+      _master = system.actorOf(Props(new Actor {
         override def receive: Receive = {
           case msg if handler.isDefinedAt(msg) => handler.lift(msg).flatten.foreach(sender() ! _)
           case msg => fail(s"Unexpected message $msg")
@@ -98,10 +139,10 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
     }
 
     def withWorker(f: ActorRef => Unit): Unit = {
-      val worker = system.actorOf(Props(new Worker(master, repo, browser, partition, false)))
+      val worker = system.actorOf(Props(new Worker(_master, repo, browser, partition, false)))
       f(worker)
       system.stop(worker)
-      system.stop(master)
+      system.stop(_master)
     }
 
   }

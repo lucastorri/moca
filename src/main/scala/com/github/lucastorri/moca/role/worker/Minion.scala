@@ -154,14 +154,24 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   private def notify(msg: Any): Unit = {
     implicit val timeout: Timeout = 1.hour
-    try Await.result((parent ? msg).filter(_ == Continue), timeout.duration)
-    catch { case e: Exception => context.stop(self); throw e }
+    Try(Await.result(parent ? msg, timeout.duration)) match {
+      case Success(Continue) =>
+      case other =>
+        context.stop(self)
+        throw other match {
+          case Success(r) => AbortException(task, r)
+          case Failure(t) => AbortException(task, "-none-", t)
+        }
+    }
   }
 
   override val persistenceId: String = s"minion-${task.id}"
   override def journalPluginId: String = system.settings.config.getString("moca.minion.journal-plugin-id")
 
 }
+
+case class AbortException(task: Task, reply: Any, cause: Throwable = null)
+  extends Exception(s"Aborting task ${task.id} after reply $reply from worker", cause)
 
 object Minion {
 
