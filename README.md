@@ -120,6 +120,8 @@ http://www.example.com|1|custom-criteria
 
 If no `default` is defined, a system default will be used, that is a combination of `AHrefCriteria` with `MaxDepthCriteria(2)`.
 
+Links are always downloaded [breadth-first](https://en.wikipedia.org/wiki/Breadth-first_search). This ensures that on a same task a given link will always be fetched on the minimal depth possible.
+
 
 ### Checking results for a specific seed
 
@@ -280,6 +282,9 @@ Array.prototype.slice.call(document.getElementsByTagName('a')).map(function(e) {
 * Don't store more than needed for DNS names:
 	- Each label may contain up to 63 characters. The full domain name may not exceed the length of 253 characters in its textual representation
 	- <https://en.wikipedia.org/wiki/Domain_Name_System>
+* Back up in memory data structures with [MapDB](http://www.mapdb.org/):
+	- PgRunControl.Run.{partitionTaskId, taskIdPartition, knownDepths}
+	- Minion.{downloaded, outstanding}
 
 ## References
 
