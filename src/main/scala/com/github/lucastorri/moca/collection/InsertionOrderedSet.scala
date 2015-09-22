@@ -12,6 +12,8 @@ class InsertionOrderedSet[T]()
 
   override def contains(item: T): Boolean = _set.containsKey(item.hashCode)
 
+  override def size: Int = _set.size
+
   override def isEmpty: Boolean = _set.isEmpty
 
   override def empty: InsertionOrderedSet[T] = new InsertionOrderedSet[T]()
@@ -25,14 +27,14 @@ class InsertionOrderedSet[T]()
       _last = k
       _set.put(k, Entry(item, k, k))
     } else if (_head == _last) {
-      _set.put(_last, _set.get(_last).copy(previous = k, next = k))
       _set.put(k, Entry(item, _last, _last))
-      _head = k
+      _set.put(_last, _set.get(_last).copy(previous = k, next = k))
+      _last = k
     } else {
-      _set.put(_last, _set.get(_last).copy(next = k))
-      _set.put(_head, _set.get(_head).copy(previous = k))
       _set.put(k, Entry(item, _last, _head))
-      _head = k
+      _set.put(_head, _set.get(_head).copy(previous = k))
+      _set.put(_last, _set.get(_last).copy(next = k))
+      _last = k
     }
 
     !removed
