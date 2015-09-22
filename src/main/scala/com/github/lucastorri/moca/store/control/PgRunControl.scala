@@ -10,8 +10,10 @@ import com.github.lucastorri.moca.store.serialization.SerializerService
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
+import org.mapdb.{DB, DBMaker}
 
 import scala.async.Async._
+import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -24,7 +26,7 @@ class PgRunControl(
   implicit val ec: ExecutionContext
 ) extends RunControl with PgRunControlSchema with StrictLogging { self =>
 
-  import com.github.lucastorri.moca.store.control.PgDriver.api._
+  import PgDriver.api._
 
   protected val db = Database.forConfig("connection", config)
   protected val ws = serializers.create[CriteriaHolder]
@@ -54,7 +56,7 @@ class PgRunControl(
     await(Future.sequence(loaded)).foreach { case (run, (idsAndPartitions, depths)) =>
       idsAndPartitions.foreach { case (taskId, part) =>
         run.addTask(part, taskId)
-        run.depths.project(depths.map { case (url, depth) => (url, partition(url)) -> depth }.toMap).commit()
+        run.depths.project(depths).commit()
       }
       running.add(run)
     }
@@ -126,8 +128,7 @@ class PgRunControl(
 
     val part = run.partition(taskId)
     val currentDepths = run.depths
-    val newDepths = transfer.contents.map { link => (link.url, part) -> link.depth }.toMap
-    val projectedDepths = currentDepths.project(newDepths)
+    val projectedDepths = currentDepths.project(transfer)
 
     async {
 
@@ -243,18 +244,24 @@ class PgRunControl(
     private val lock = new Semaphore(1, true)
     private val partitionTaskId = mutable.HashMap.empty[String, String]
     private val taskIdPartition = mutable.HashMap.empty[String, String]
-    private val knownDepths = mutable.HashMap.empty[(Int, Int), Int]
+    private val fdb = DBMaker
+      .tempFileDB()
+      .deleteFilesAfterClose()
+      .closeOnJvmShutdown()
+      .fileMmapEnableIfSupported()
+      .cacheLRUEnable()
+      .make()
+    private val knownDepths = fdb.hashMap("known-depths")[Long, Int]
 
-    def depths = new CurrentDepths(knownDepths)
+    def depths = new CurrentDepths(knownDepths, fdb)
 
     def addTask(partition: String, taskId: String): Unit = {
       partitionTaskId.put(partition, taskId)
       taskIdPartition.put(taskId, partition)
     }
 
-    def finishTask(taskId: String): Unit = {
+    def finishTask(taskId: String): Unit =
       taskIdPartition.remove(taskId).foreach(partitionTaskId.remove)
-    }
 
     def hasPartition(partition: String): Boolean =
       partitionTaskId.contains(partition)
@@ -269,12 +276,20 @@ class PgRunControl(
       try {
         lock.acquire()
         val result = action
-        result.onComplete { case _ => lock.release() }
+        result.onComplete { case _ => done() }
         result
       } catch { case e: Exception =>
-        lock.release()
+        done()
         Future.failed(e)
       }
+    }
+
+    def close(): Unit =
+      fdb.close()
+
+    private def done(): Unit = {
+      lock.release()
+      fdb.rollback()
     }
 
   }
@@ -293,7 +308,7 @@ class PgRunControl(
       running.get(runId)
 
     def remove(run: Run): Unit = synchronized {
-      running.remove(run.id)
+      running.remove(run.id).foreach(_.close())
       workIds.remove(run.workId)
     }
 
@@ -304,44 +319,54 @@ class PgRunControl(
 
   trait Depths {
 
-    def current: Map[(Int, Int), Int]
+    def get(key: Long): Option[Int]
 
     def depthStatus(url: Url, partition: String, depth: Int): DepthStatus = {
-      current.get(depthKey(url, partition)) match {
+      get(depthKey(url, partition)) match {
         case Some(d) if depth < d => SmallerDepth
         case None => NewDepth
         case _ => IgnoredDepth
       }
     }
 
-    def depthKey(url: Url, partition: String): (Int, Int) =
-      partition.hashCode -> url.hashCode
+    def depthKey(url: Url, partition: String): Long =
+      (partition.hashCode.toLong << 32) | (url.hashCode.toLong & 4294967295L)
 
   }
 
-  class CurrentDepths(depths: mutable.HashMap[(Int, Int), Int]) extends Depths {
+  class CurrentDepths(depths: java.util.Map[Long, Int], fdb: DB) extends Depths {
 
-    override val current = depths.toMap
+    override def get(key: Long): Option[Int] = Option(depths.get(key))
 
-    def project(other: Map[(Url, String), Int]): ProjectedDepths =
-      new ProjectedDepths(depths, other)
-
-  }
-
-  class ProjectedDepths(depths: mutable.HashMap[(Int, Int), Int], other: Map[(Url, String), Int]) extends Depths {
-
-    override val current = {
-      val current = mutable.HashMap.empty[(Int, Int), Int] ++ depths
-      other.foreach { case ((url, part), depth) =>
-        val key = depthKey(url, part)
-        val shallowest = math.min(current.getOrElse(key, Int.MaxValue), depth)
-        current.put(key, shallowest)
-      }
-      current.toMap
+    def project(transfer: ContentLinksTransfer): ProjectedDepths = {
+      transfer.contents.foreach(link => project(link.url, link.depth))
+      new ProjectedDepths(depths, fdb)
     }
 
+    def project(pairs: Seq[(Url, Int)]): ProjectedDepths = {
+      pairs.foreach { case (url, depth) => project(url, depth) }
+      new ProjectedDepths(depths, fdb)
+    }
+
+    def project(entries: Map[(Url, String), Int]): ProjectedDepths = {
+      entries.foreach { case ((url, part), depth) => project(depthKey(url, part), depth) }
+      new ProjectedDepths(depths, fdb)
+    }
+
+    private def project(url: Url, depth: Int): Unit =
+      project(depthKey(url, partition(url)), depth)
+
+    private def project(key: Long, depth: Int): Unit =
+      depths.put(key, math.min(depth, depths.getOrElse(key, Int.MaxValue)))
+
+  }
+
+  class ProjectedDepths(depths: java.util.Map[Long, Int], fdb: DB) extends Depths {
+
+    override def get(key: Long): Option[Int] = Option(depths.get(key))
+
     def commit(): Unit =
-      depths ++= current
+      fdb.commit()
 
   }
 
