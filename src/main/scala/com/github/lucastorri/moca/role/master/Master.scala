@@ -181,7 +181,6 @@ class Master(control: RunControl) extends PersistentActor with StrictLogging {
       deleteSnapshots(SnapshotSelectionCriteria(meta.sequenceNr - 1, meta.timestamp, 0, 0))
 
     case ConsistencyCheck =>
-      //TODO check for discrepancies between repo and state
       val messenger = sender()
       ack(messenger)
 

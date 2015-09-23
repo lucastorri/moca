@@ -44,7 +44,6 @@ package object async {
   def spawn[T](f: => T): Future[T] = {
     val promise = Promise[T]()
     new Thread() {
-      //TODO update to IDEA 15 and use -Xexperimental https://twitter.com/intellijidea/status/621620162505121792
       override def run(): Unit = promise.complete(Try(f))
     }.start()
     promise.future

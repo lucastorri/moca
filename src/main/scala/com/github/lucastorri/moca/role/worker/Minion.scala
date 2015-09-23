@@ -118,7 +118,6 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
   }
 
   def save(link: Link, result: Try[(Fetched, Content)]): Future[Option[Fetched]] = {
-    //TODO save both original and rendered Url (let something like a ContentSaveSelector choose that)
     result match {
       case Success((fetched, content)) =>
         logger.debug(s"Fetched ${fetched.link.url} at depth ${fetched.link.depth}")
