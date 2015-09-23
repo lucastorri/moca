@@ -284,12 +284,16 @@ class PgRunControl(
       }
     }
 
-    def close(): Unit =
+    def close(): Unit = {
+      fdb.rollback()
       fdb.close()
+    }
 
     private def done(): Unit = {
       lock.release()
-      fdb.rollback()
+      if (!fdb.isClosed) {
+        fdb.rollback()
+      }
     }
 
   }
