@@ -6,9 +6,9 @@ class InsertionOrderedSet[T]()
   extends scala.collection.mutable.Set[T]
   with scala.collection.mutable.SetLike[T, InsertionOrderedSet[T]] {
 
-  private val _set = emptyInnerMap()
-  private val _head = emptyPointer()
-  private val _last = emptyPointer()
+  private val _set = innerMap()
+  private val _head = headPointer()
+  private val _last = lastPointer()
 
   override def contains(item: T): Boolean = _set.containsKey(item.hashCode)
 
@@ -89,9 +89,11 @@ class InsertionOrderedSet[T]()
 
   }
 
-  protected def emptyInnerMap(): java.util.Map[Int, Entry[T]] = new java.util.HashMap[Int, Entry[T]]()
+  protected def innerMap(): java.util.Map[Int, Entry[T]] = new java.util.HashMap[Int, Entry[T]]()
 
-  protected def emptyPointer(): Pointer = new DefaultPointer
+  protected def headPointer(): Pointer = new DefaultPointer
+  
+  protected def lastPointer(): Pointer = new DefaultPointer
 
   protected def onUpdate(): Unit = {}
 

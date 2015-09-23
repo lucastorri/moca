@@ -4,6 +4,7 @@ import akka.pattern.ask
 import akka.persistence.{DeleteMessagesSuccess, PersistentActor, RecoveryCompleted}
 import akka.util.Timeout
 import com.github.lucastorri.moca.browser.{Browser, Content}
+import com.github.lucastorri.moca.collection.MapDBInsertionOrderedSet
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.Task
 import com.github.lucastorri.moca.role.worker.Minion.Event.{Fetched, Found, NotFetched}
@@ -12,8 +13,8 @@ import com.github.lucastorri.moca.role.worker.Worker.{Continue, Done, Partition}
 import com.github.lucastorri.moca.store.content.TaskContentRepo
 import com.github.lucastorri.moca.url.Url
 import com.typesafe.scalalogging.StrictLogging
+import org.mapdb.DBMaker
 
-import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
@@ -22,11 +23,25 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   import context._
 
-  private val downloaded = mutable.HashSet.empty[Int]
-  private val outstanding = mutable.LinkedHashSet.empty[Link]
+  private val fdb = DBMaker
+    .tempFileDB()
+    .deleteFilesAfterClose()
+    .closeOnJvmShutdown()
+    .fileMmapEnableIfSupported()
+    .cacheLRUEnable()
+    .transactionDisable()
+    .make()
+
+  private val downloaded = fdb.hashSet[Int]("downloaded")
+  private val outstanding = new MapDBInsertionOrderedSet[Link](fdb)
 
   override def preStart(): Unit = {
     logger.trace(s"Minion started to work on ${task.id}")
+  }
+
+  override def postStop(): Unit = {
+    fdb.close()
+    super.postStop()
   }
 
   override def receiveRecover: Receive = {
@@ -135,7 +150,7 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
 
   def markFetched(link: Link): Unit = {
     outstanding.remove(link)
-    downloaded += link.url.hashCode
+    downloaded.add(link.url.hashCode)
   }
 
   def scheduleNext(): Unit = {

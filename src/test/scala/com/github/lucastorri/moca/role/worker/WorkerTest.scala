@@ -142,7 +142,7 @@ class WorkerTest extends FlatSpec with MustMatchers with RoleTest {
 
   }
 
-  it must "abort task if cannot inform of partitions" in new context {
+  it must "abort task if cannot inform partitions" in new context {
 
     var first = true
 
