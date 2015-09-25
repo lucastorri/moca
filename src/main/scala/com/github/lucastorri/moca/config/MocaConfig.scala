@@ -5,7 +5,6 @@ import java.nio.charset.Charset
 
 import akka.actor.ActorSystem
 import com.github.lucastorri.moca.browser.{BrowserProvider, BrowserSettings}
-import com.github.lucastorri.moca.config.MocaConfig._
 import com.github.lucastorri.moca.partition.PartitionSelector
 import com.github.lucastorri.moca.role.client.Client
 import com.github.lucastorri.moca.role.client.Client.Command.{AddSeedFile, CheckWorkRepoConsistency, GetSeedResults}
@@ -15,8 +14,9 @@ import com.github.lucastorri.moca.store.content.ContentRepo
 import com.github.lucastorri.moca.store.content.serializer.ContentSerializer
 import com.github.lucastorri.moca.store.control.RunControl
 import com.github.lucastorri.moca.store.serialization.SerializerService
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 
+import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
@@ -41,28 +41,18 @@ case class MocaConfig(
   def hasRole(role: String): Boolean =
     roles.contains(role)
 
-  lazy val main: Config = {
-    val rolesArray = stringArray(roles)
-    val hostnameString =
-      if (isNotSingleInstance) quote(hostname)
-      else quote("127.0.0.1")
-    val seedArray =
-      if (isNotSingleInstance) stringArray(seeds.map(hostAndPort => seed(systemName, hostAndPort)))
-      else stringArray(seed(systemName, s"127.0.0.1:$port"))
-
+  lazy val mainConfig: Config = {
+    
     val extraCfg = extraConfig match {
       case Some(f) => ConfigFactory.parseFile(f)
       case None => ConfigFactory.parseString("")
     }
 
-    val resolveCfg = ConfigFactory.parseString(s"""
-        |resolve {
-        |  roles = $rolesArray
-        |  seeds = $seedArray
-        |  port = $port
-        |  host = $hostnameString
-        |}
-      """.stripMargin)
+    val resolveCfg = ConfigFactory.empty()
+      .withValue("resolve.roles", ConfigValueFactory.fromIterable(roles))
+      .withValue("resolve.seeds", ConfigValueFactory.fromIterable(seeds))
+      .withValue("resolve.port", ConfigValueFactory.fromAnyRef(port))
+      .withValue("resolve.host", ConfigValueFactory.fromAnyRef(hostname))
 
     val mainCfg = ConfigFactory.parseResourcesAnySyntax("main.conf")
 
@@ -73,11 +63,11 @@ case class MocaConfig(
   }
 
   lazy val system: ActorSystem =
-    ActorSystem(systemName, main)
+    ActorSystem(systemName, mainConfig)
 
 
   def runControl: RunControl = {
-    val controlConfig = main.getConfig(main.getString("moca.run-control-id"))
+    val controlConfig = mainConfig.getConfig(mainConfig.getString("moca.run-control-id"))
     val build = ClassBuilder.fromConfig(controlConfig,
       classOf[ExecutionContext] -> system.dispatcher,
       classOf[PartitionSelector] -> partition,
@@ -87,14 +77,14 @@ case class MocaConfig(
   }
 
   lazy val contentSerializer: ContentSerializer = {
-    val serializerConfig = main.getConfig(main.getString("moca.content-serializer-id"))
+    val serializerConfig = mainConfig.getConfig(mainConfig.getString("moca.content-serializer-id"))
     val build = ClassBuilder.fromConfig(serializerConfig)
 
     build()
   }
 
   def contentRepo: ContentRepo = {
-    val repoConfig = main.getConfig(main.getString("moca.content-repo-id"))
+    val repoConfig = mainConfig.getConfig(mainConfig.getString("moca.content-repo-id"))
     val build = ClassBuilder.fromConfig(repoConfig,
       classOf[ActorSystem] -> system,
       classOf[ContentSerializer] -> contentSerializer)
@@ -103,14 +93,14 @@ case class MocaConfig(
   }
   
   lazy val partition: PartitionSelector = {
-    val partitionConfig = main.getConfig(main.getString("moca.partition-selector-id"))
+    val partitionConfig = mainConfig.getConfig(mainConfig.getString("moca.partition-selector-id"))
     val build = ClassBuilder.fromConfig(partitionConfig)
 
     build()
   }
 
   lazy val browserProvider: BrowserProvider = {
-    val providerConfig = main.getConfig(main.getString("moca.browser-provider-id"))
+    val providerConfig = mainConfig.getConfig(mainConfig.getString("moca.browser-provider-id"))
     val build = ClassBuilder.fromConfig(providerConfig,
       classOf[ActorSystem] -> system,
       classOf[ExecutionContext] -> system.dispatcher,
@@ -120,7 +110,7 @@ case class MocaConfig(
   }
 
   lazy val browserSettings: BrowserSettings = {
-    val baseConfig = main.getConfig("browser")
+    val baseConfig = mainConfig.getConfig("browser")
     BrowserSettings(
       Charset.forName(baseConfig.getString("html-charset")),
       Duration.fromNanos(baseConfig.getDuration("load-timeout").toNanos),
@@ -128,7 +118,7 @@ case class MocaConfig(
   }
   
   lazy val serializerService: SerializerService = {
-    val serviceConfig = main.getConfig(main.getString("moca.serializer-service-id"))
+    val serviceConfig = mainConfig.getConfig(mainConfig.getString("moca.serializer-service-id"))
     val build = ClassBuilder.fromConfig(serviceConfig,
       classOf[ActorSystem] -> system)
 
@@ -196,17 +186,5 @@ object MocaConfig {
       .text("prints this usage text")
 
   }
-
-  private def seed(systemName: String, hostAndPort: String): String =
-    s"akka.tcp://$systemName@$hostAndPort"
-
-  private def stringArray(strings: Iterable[String]): String =
-    strings.map(quote).mkString("[", ",", "]")
-
-  private def quote(str: String): String =
-    "\"" + str + "\""
-
-  private def stringArray(strings: String*): String =
-    stringArray(strings)
 
 }
