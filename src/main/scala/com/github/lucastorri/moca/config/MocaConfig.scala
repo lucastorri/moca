@@ -25,7 +25,7 @@ case class MocaConfig(
   systemName: String = "MocaSystem",
   seeds: Set[String] = Set.empty,
   port: Int = 1731,
-  hostname: String = "",
+  hostname: String = "127.0.0.1",
   workers: Int = 10,
   clientCommands: Set[Client.Command[_]] = Set.empty,
   extraConfig: Option[File] = Option.empty,
@@ -49,16 +49,15 @@ case class MocaConfig(
       case None => ConfigFactory.parseString("")
     }
 
-    val host = if (isNotSingleInstance) hostname else "127.0.0.1"
     val akkaSeeds =
       if (isNotSingleInstance) seeds.map(seed => seedToAkkaSeed(systemName, seed))
-      else Set(seedToAkkaSeed(systemName, s"127.0.0.1:$port"))
+      else Set(seedToAkkaSeed(systemName, s"$hostname:$port"))
 
     val resolveCfg = ConfigFactory.empty()
       .withValue("resolve.roles", ConfigValueFactory.fromIterable(roles))
       .withValue("resolve.seeds", ConfigValueFactory.fromIterable(akkaSeeds))
       .withValue("resolve.port", ConfigValueFactory.fromAnyRef(port))
-      .withValue("resolve.host", ConfigValueFactory.fromAnyRef(host))
+      .withValue("resolve.host", ConfigValueFactory.fromAnyRef(hostname))
 
     val mainCfg = ConfigFactory.parseResourcesAnySyntax("main.conf")
 
