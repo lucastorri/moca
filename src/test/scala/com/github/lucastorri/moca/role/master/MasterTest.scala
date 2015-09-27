@@ -2,10 +2,11 @@ package com.github.lucastorri.moca.role.master
 
 import akka.actor._
 import akka.pattern.ask
+import com.github.lucastorri.moca.role
 import com.github.lucastorri.moca.role.Messages._
-import com.github.lucastorri.moca.role.{RoleTest, Task, Work}
+import com.github.lucastorri.moca.role._
 import com.github.lucastorri.moca.store.content.ContentLinksTransfer
-import com.github.lucastorri.moca.store.control.{EmptyCriteria, FixedTransfer, RunControl}
+import com.github.lucastorri.moca.store.control.{RunControl}
 import com.github.lucastorri.moca.url.Url
 import org.scalatest.{FlatSpec, MustMatchers}
 
