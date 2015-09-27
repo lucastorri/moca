@@ -48,7 +48,9 @@ class Worker(val master: ActorRef, repo: ContentRepo, browserProvider: BrowserPr
 
     case Event(TaskOffer(task), _) =>
       sender() ! Ack
-      actorOf(Props(new Minion(task, browserProvider.instance(), repo(task), partition)))
+      watch {
+        actorOf(Props(new Minion(task, browserProvider.instance(), repo(task), partition)))
+      }
       goto(State.Working) using task
 
     case Event(MasterUp, _) =>
@@ -107,6 +109,10 @@ class Worker(val master: ActorRef, repo: ContentRepo, browserProvider: BrowserPr
     case Event(MasterUp, _) =>
       abortTask()
       goto(State.OnHold) using null
+
+    case Event(Terminated(ref), _) if children.exists(_ == ref) =>
+      abortTask()
+      goto(State.Idle) using null
 
   }
 
