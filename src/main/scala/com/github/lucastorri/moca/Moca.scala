@@ -16,13 +16,13 @@ object Moca extends App with StrictLogging {
 
   logger.info("Moca starting")
 
-  if (config.hasRole(Master.role)) {
-    Master.standBy(config.runControl)
-  }
-
   if (config.hasRole(Worker.role)) {
     val start = Worker.start(config.contentRepo, config.browserProvider, config.partition, config.dedicatedMaster) _
     (1 to config.workers).foreach(start)
+  }
+
+  if (config.hasRole(Master.role)) {
+    Master.standBy(config.runControl)
   }
   
   if (config.hasRole(Client.role)) {
