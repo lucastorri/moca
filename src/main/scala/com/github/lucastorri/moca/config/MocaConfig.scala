@@ -19,6 +19,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
+import MocaConfig.seedToAkkaSeed
 
 case class MocaConfig(
   systemName: String = "MocaSystem",
@@ -50,7 +51,7 @@ case class MocaConfig(
 
     val resolveCfg = ConfigFactory.empty()
       .withValue("resolve.roles", ConfigValueFactory.fromIterable(roles))
-      .withValue("resolve.seeds", ConfigValueFactory.fromIterable(seeds))
+      .withValue("resolve.seeds", ConfigValueFactory.fromIterable(seeds.map(seed => seedToAkkaSeed(systemName, seed))))
       .withValue("resolve.port", ConfigValueFactory.fromAnyRef(port))
       .withValue("resolve.host", ConfigValueFactory.fromAnyRef(hostname))
 
@@ -186,5 +187,8 @@ object MocaConfig {
       .text("prints this usage text")
 
   }
+
+  def seedToAkkaSeed(systemName: String, hostAndPort: String): String =
+    s"akka.tcp://$systemName@$hostAndPort"
 
 }
