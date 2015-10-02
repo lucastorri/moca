@@ -249,7 +249,6 @@ class PgRunControl(
       .deleteFilesAfterClose()
       .closeOnJvmShutdown()
       .fileMmapEnableIfSupported()
-      .cacheLRUEnable()
       .make()
     private val knownDepths = fdb.hashMap[Long, Int]("known-depths")
 

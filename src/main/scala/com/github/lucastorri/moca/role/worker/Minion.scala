@@ -28,7 +28,6 @@ class Minion(task: Task, browser: Browser, repo: TaskContentRepo, partition: Par
     .deleteFilesAfterClose()
     .closeOnJvmShutdown()
     .fileMmapEnableIfSupported()
-    .cacheLRUEnable()
     .transactionDisable()
     .make()
 
