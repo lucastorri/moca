@@ -146,6 +146,14 @@ This will return the latest results for a given **Work**, or none if it hasn't f
 
 ## Set Up
 
+### Build `akka-persistence-sql-async` 0.3
+
+`akka-persistence-sql-async` is still in development and not yet published. In order to use it, you need to clone the project and run
+
+```bash
+sbt publish-local
+```
+
 ### PostgreSQL for `PgWorkRepo`
 
 Just run the following on your console:
@@ -211,6 +219,12 @@ And this to `pg_hba.conf`:
 
 ```
 host all all 0.0.0.0/0 md5
+```
+
+### Clean Up Tables
+
+```sql
+delete from journal; delete from snapshot; drop table final_result; drop table outstanding_url; drop table partial_result; drop table task; drop table url_depth; drop table run; drop table work;
 ```
 
 
